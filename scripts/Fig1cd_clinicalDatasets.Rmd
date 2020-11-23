@@ -1,0 +1,42 @@
+---
+title: "Fig1cd_clinicalDatasets"
+output: html_document
+---
+
+## R Markdown
+
+```{r}
+library(ggplot2)
+paletteCMSn=c("CMS1" ="#E79E1B", 
+             "CMS2"= "#0071B1", 
+             "CMS3"= "#C45597",#Guinney:"#C977A4", 
+              "CMS4"="#009C74",
+             "NOLBL"="#d3d3d3")
+
+## plot VU predictions
+listCMSlabs <- list("COAD"=,"CPTAC2"=clinSupp.cptac$CMS, )
+for CMSvec in  {
+CMSvecN <- factor(CMSvecN, 
+                  levels=c("CMS1", "CMS2", "CMS3", "CMS4", "NOLBL"),
+                  ordered = T)
+CMSvecN[is.na(CMSvecN)] <- "NOLBL"
+
+data.frame("CMS"=CMSvecN) %>% 
+  ggplot(aes(x = CMS, fill = CMS )) +
+  geom_bar() +
+  theme_minimal() + 
+  scale_fill_manual(values=c(paletteCMSn)) + #"#4F2776"
+  ggtitle(paste0("CMS in ", CMSvec))
+}
+
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

@@ -1,0 +1,177 @@
+---
+title: "DE-analysis"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r}
+
+## DESeq2 getter
+getDDS <- function( gene.counts=NULL, phenData=NULL, 
+                    mainCond=NULL, listForm = NULL, refList = NULL, rlog = FALSE) {
+  dds <- DESeqDataSetFromMatrix( countData = gene.counts, 
+                                         colData = phenData, 
+                                         design = listForm )
+
+  colData( dds )[ , mainCond ] <-  relevel( colData( dds )[ , mainCond ],
+                                            ref =  refList )
+  colData( dds )[ , mainCond ] <-  droplevels( colData( dds )[ , mainCond ] )
+
+  dds <- dds[ rowSums( counts( dds )) > 1, ]
+
+  if(rlog) {
+    dds <- varianceStabilizingTransformation(dds, blind=FALSE)
+  }
+  
+  return(dds)
+  
+}
+#library("GSVA")
+library("DESeq2")
+# browseVignettes("DESeq2")
+library("stringi")
+library("GenomicFeatures")
+library("GenomicAlignments")
+library("BiocParallel")
+library("Rsamtools")
+library("tools")
+library("pheatmap")
+library("RColorBrewer")
+library("ggplot2")
+library("gridExtra")
+library("genefilter")
+library("AnnotationDbi")
+library("org.Hs.eg.db")
+library(plyr)
+library(reshape)
+library(ComplexHeatmap)
+library(circlize)
+library(DT)
+library(dplyr)
+
+
+## directories
+geneDB <- org.Hs.eg.db
+analysHome <- "/Users/ronjaadam/projects/miRNA_mCRC/miRNA classifier/analyses/DE-results/"
+projHome <- "/Users/ronjaadam/projects/miRNA_mCRC/miRNA classifier/analyses/DE-results"
+## define Deseq2 analysis param
+mainCond <- c( paste0("CMS", 1:4) )
+listForm <- list( formula( ~ TSS + CMS1 ),
+                  formula( ~ TSS + CMS2 ),
+                  formula( ~ TSS + CMS3 ),
+                  formula( ~ TSS + CMS4 ))
+refList <- c( rep("other", 4) )
+altHyp <- c(  rep("greaterAbs", 4) )
+samples <- c(paste0("CMS", 1:4))
+exclOutl <- which(colnames(miR_COAD_comb) %in% 
+                               setdiff( colnames(miR_COAD_comb), 
+                                        c( outlierS,
+                                           #exclude outliers and out of training samples!
+                                           rc_vst_out$Sample.ID)) )
+#by chance, there are no second samples of a patient in the out of training set, but 4 pairs in the training set
+grouping <- list( exclOutl, exclOutl, exclOutl, exclOutl ) 
+#tssAnnot <- data.frame("CMS"=miR_COAD_vst$CMS.cl.rf) #use the predicted labels here in order to have labels for all
+# pre Batch effect removal pre outlier removal
+#rownames(tssAnnot) <- rownames(miR_COAD_vst)
+#tssAnnot$TSS <- sub("-.*","", sub( "TCGA-", "", rownames(tssAnnot) ) )
+tssAnnot$CMS1 <- factor( ifelse(grepl("CMS1", tssAnnot$CMS), "CMS1", "other"))
+tssAnnot$CMS2 <- factor( ifelse(grepl("CMS2", tssAnnot$CMS), "CMS2", "other"))
+tssAnnot$CMS3 <- factor( ifelse(grepl("CMS3", tssAnnot$CMS), "CMS3", "other"))
+tssAnnot$CMS4 <- factor( ifelse(grepl("CMS4", tssAnnot$CMS), "CMS4", "other"))
+
+
+### do DEseq analysis
+listDDS <- vector("list", length=length(grouping))
+listRLD <- vector("list", length=length(grouping))
+listDEDDS <- vector("list", length=length(grouping))
+listRes <- vector("list", length=length(grouping))
+
+for( i in 1:length(grouping)) {
+  print(paste("now calculating:", samples[i], mainCond[i]), sep=" ")
+  listDDS[[i]] <- getDDS( gene.counts = round( miR_COAD_comb, 0 )[ , grouping[[i]] ], 
+                          phenData = tssAnnot[ grouping[[i]] , 
+                                                c(paste0("CMS",i), "TSS") ], 
+                          mainCond = mainCond[i], 
+                          listForm = listForm[[i]],
+                          refList = refList[i],
+                          rlog = F ) 
+  listRLD[[i]] <- getDDS( gene.counts=round( miR_COAD_comb, 0 )[ , grouping[[i]] ], 
+                          phenData = tssAnnot[ grouping[[i]] , 
+                                                c(paste0("CMS",i), "TSS")], 
+                          mainCond = mainCond[i], 
+                          listForm = listForm[[i]],
+                          refList = refList[i],
+                          rlog = TRUE ) #gives VST in this case with blind=FALSE
+  }
+listDEDDS <- lapply( listDDS, DESeq )
+#listDEDDS[[i]] <- DESeq(listDDS[[i]])
+for( i in 1:length(grouping) ) {
+  listRes[[i]] <- results(listDEDDS[[ i ]], 
+           altHypothesis = altHyp[ i ],
+           alpha=0.05)
+}
+lapply( listRes, summary ) 
+summary(listRes[[1]])
+minAdjP <- 0.05
+
+##### INSPECT RESULTS #####
+i=1
+DEgenes <- data.frame("CMS"=NA,
+                      "GeneID"=NA,
+                      "padj"=NA)
+for( i in 1:length(grouping)) {
+  ## which genes are DE in one or another condition ##
+  res <- listRes[[i]]
+  rld <- listRLD[[i]]
+  normcounts <- data.frame( round( counts(listDEDDS[[i]], normalized=TRUE), 
+                                   digits = 1 ) )
+  
+  ## add more info to results table ##
+  res$symbol <- row.names(res)
+  columnNames <- colnames(res)
+  res <- cbind( res, normcounts )
+  colnames( res ) <- c(columnNames, colnames(assay(rld)))
+
+  ## write results table ##
+  resOrdered <- as(res[ order(res$padj, -abs(res$stat), na.last = T ), ],
+                   "data.frame")
+  resOrderedSig <- resOrdered[ which( resOrdered$padj < minAdjP &
+                                        abs(resOrdered$log2FoldChange) > log2(1.5)), ]
+  write.table( data.frame( "GeneID"=row.names(resOrdered), resOrdered ),
+             file = paste0( analysHome, "/resTable-all-",
+                            samples[i], 
+                            ".csv"),
+              row.names = F, sep = "\t", col.names = TRUE )
+  
+  write.table( data.frame( "GeneID"=row.names(resOrderedSig), resOrderedSig ),
+             file = paste0( analysHome, "/resSigTable-",
+                            samples[i], 
+                            ".csv"),
+              row.names = F, sep = "\t", col.names = TRUE )
+  DEgenes <- rbind(na.exclude(DEgenes), data.frame("CMS"=paste0("CMS", i),
+                            "GeneID"=rownames(resOrderedSig),
+                            "padj"=resOrderedSig$padj,
+                            "stat"=resOrderedSig$stat))
+}
+setdiff(sort(gsub("-",".",DEgenes$GeneID)), feature_names) # which genes are expressed but not DE
+  
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
