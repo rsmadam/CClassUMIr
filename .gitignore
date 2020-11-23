@@ -1,3 +1,4 @@
+
 # Structure
 /Data/
 /data/
@@ -5,6 +6,9 @@
 /analyses/
 /scripts/Data/
 /scripts/GDCdata/
+CMS-miRaCl.Rproj
+.Rproj.user/
+/test/
 
 # History files
 .Rhistory
