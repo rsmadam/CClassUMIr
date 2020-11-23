@@ -1,0 +1,176 @@
+---
+title: "Fig1b_heatmap"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r}
+
+importances_df <- read.csv("analyses/tables/val_100x5cv_10x10cv_importances.csv",
+                           row.names = 1)
+
+
+#### heatmaps #####
+library(circlize)
+DEgenes <- data.frame("GeneID"=NA,"padj"=NA,"stat"=NA, "CMS"=NA)
+for (i in 1:4 ){
+DEmiRS <- read.csv(paste0(projHome, "analyses/DE-results/resSigTable-p0.05fc0.71-COAD-GA-miRs-LV-CMS-CMS", 
+                          i, ".csv"),
+                    as.is = T)[,c("GeneID","padj","stat")]
+DEmiRS$CMS <- paste0("CMS", i)
+DEgenes <- rbind(DEgenes, DEmiRS)
+}
+
+DEgenes$GeneID <- gsub("-", ".", DEgenes$GeneID)
+DEgenes <- DEgenes[DEgenes$GeneID %in% colnames(rc_vst_BR),] #drop out due to highly correlated features
+
+DEgenes.Top <- DEgenes %>% dplyr::group_by(CMS) %>%
+  top_n( 10, -stat )
+DEgenes.Top <- DEgenes.Top[order(DEgenes.Top$stat, decreasing = T),]
+DEgenes.Top <- rbind(as.data.frame(DEgenes.Top[isUnique(DEgenes.Top$GeneID),]),
+                     data.frame("CMS"=NA,
+                                "GeneID"=unique(DEgenes.Top[!isUnique(DEgenes.Top$GeneID),
+                                                            "GeneID" ]),
+                                "padj"=NA,
+                                "stat"=NA)) #if a miR repeatedly occurs, it is assigned no CMS
+rownames(DEgenes.Top) <- DEgenes.Top$GeneID
+#DEgenes.Top$inRF <- DEgenes.Top$GeneID %in% colnames(rc_vst_BR) #drop out due to highly correlated features
+DEgenes.Top <- DEgenes.Top[order(DEgenes.Top$CMS),]
+DEgenes.Top$impRF <- importances_df[match(DEgenes.Top$GeneID, 
+                                          rownames(importances_df)),"Overall"]
+DEgenes.Top$logP <- -log10(DEgenes.Top$padj)
+
+## VU mir Data ##
+col_vec = structure(as.character(wes_palette("Darjeeling1", 15,
+                                             type = c( "continuous")))[1:12], 
+                    names = levels(clinVU$sampleType))
+col_vec_2 = structure(as.character(wes_palette("IsleofDogs2", 11,
+                                             type = c( "continuous")))[11:1], 
+                    names = levels(clinVU$perc))
+
+haVU <- HeatmapAnnotation( df = clinVU[-grep("normal", clinVU$sampleType),
+                                       c("CMS", "sampleType", "perc")],
+                           col = list( "sampleType"= col_vec,
+                                       "CMS" = c("CMS1"="#E79E1B", "CMS2"="#0071B1",
+                                                 "CMS3"="#C45597", "CMS4"="#009C74",
+                                                 "NA"="#999999"),
+                                       "perc" = col_vec_2),
+                           na_col = "grey")
+
+
+
+#### heatmap TCGA data #### 
+### all data including test set
+dfAnnot_BR <- data.frame("CMS"=rc_vst_BR[,"CMS"])#factor(c(as.character(rc_vst_BR_tr[,"CMS"]), 
+                                # as.character(rc_vst_out[,"CMS"]) )))#c(grep("hsa", colnames(rc_vst_BR)), 
+                           #grep("CMS", colnames(rc_vst_BR_tr)))]
+dfAnnot_BR$pval <- -log10(as.numeric(CMS_samples$min_Pval[match(rc_vst_BR$Sample.ID,
+                                                         CMS_samples$SampleId)]))
+
+library(circlize)
+library(ComplexHeatmap)
+col_fun = colorRamp2(c(0, 0.05), c("darkblue", "white"))
+col_fun = colorRamp2(c(0, 1, 5, 18), c("white", "aliceblue", "cornflowerblue", "darkblue"))
+
+ha <- HeatmapAnnotation( df = dfAnnot_BR,
+                         col = list("pval" = col_fun,
+                                    "CMS" = c("CMS1"="#E79E1B", "CMS2"="#0071B1",
+                                              "CMS3"="#C45597", "CMS4"="#009C74",
+                                              "normal"="#410071", "NA"="#999999")),
+                         na_col = "grey")
+
+haMRNA <- HeatmapAnnotation( df = data.frame("CMS"=CMS_samples$CMS[match(colnames(TCGARnaseqDF),
+                                                                         gsub("-",".",CMS_samples$SampleId))],
+                                             "pval"=as.numeric(CMS_samples$min_Pval[match(colnames(TCGARnaseqDF),
+                                                                                          gsub("-",".",CMS_samples$SampleId))])),
+                             col = list("pval" = col_fun,
+                                        "CMS" = c("CMS1"="#E79E1B", "CMS2"="#0071B1",
+                                                  "CMS3"="#C45597", "CMS4"="#009C74",
+                                                  "normal"="#410071", "NA"="#999999")),
+                             na_col = "grey")
+
+##create main heatmap matrix
+mat <- t( scale(as.matrix(t( #mRNA:
+  na.exclude(TCGARnaseqDF[match(CMSsymbols,
+                                rownames(TCGARnaseqDF)),]))),#rc_vst_BR[,imp.miR]), 
+  center=T, scale=T ) )
+
+mat <- t( scale(as.matrix(#miRNATCGA:
+  rc_vst_BR[,DEgenes.Top$GeneID] ),
+  center=T, scale=T ) )
+
+mat <- t( scale( as.matrix(#miR-VU:
+  VU_rc_vst[-grep("normal", clinVU$sampleType), unique(DEgenes.Top$GeneID)] ),#), 
+  center=T, scale=T ) )
+
+
+colRdYlBl <- circlize::colorRamp2(c(seq(-5, -2, length = 2),seq(-2,2 ,length = 7),
+                                    seq(2, 5, length = 2)), rev( c('#a50026','#d73027','#f46d43','#fdae61','#fee090', '#ffffbf','#e0f3f8','#abd9e9','#74add1','#4575b4','#313695') ) )
+
+htFirst <- Heatmap( mat,
+                    col = colRdYlBl,
+                    cluster_columns = T, 
+                    cluster_rows = T, 
+                    clustering_distance_columns = "spearman",#
+                    clustering_distance_rows = "spearman",
+                    top_annotation = ha, 
+                    cluster_column_slices=F,
+                    cluster_row_slices=F,
+                    # column_split = t_VU_rc_vst_surv$sampleOrigin,
+                    column_split = rc_vst_BR$CMS,
+                    row_split = DEgenes.Top$CMS,
+                    #column_split = clinVU[-grep("normal", clinVU$sampleType), "CMS"],
+                    show_column_names = F, 
+                      show_row_names = T, row_names_side = "left",
+                    show_row_dend = F,
+                    name = "z-score",
+                    #column_names_gp = gpar(fontsize = 4),
+                    row_names_gp = gpar(fontsize = 6),
+                    heatmap_height = unit(4, "mm")*nrow(mat),
+                    heatmap_width = unit(1.2, "mm")*ncol(mat)
+                    )
+htSecond <- Heatmap( as.matrix(DEgenes.Top$logP) ,
+                     col =  col_fun, #colorRamp2(c(10, 0), c("darkred", "white")),
+                    # show_row_names = F,
+                     name = "-log10(p)",
+                     column_title_rot = 90,
+                     row_names_gp = gpar(fontsize = 6),
+                     width = unit(3, "mm"),
+                     column_title_side ="bottom",
+                     column_title = "-log10(padj)")
+htThird <- Heatmap( as.matrix(DEgenes.Top[,"CMS"]),
+                     col =  c(paletteCMSn, "NA"="#999999"),
+                     #show_row_names = F,
+                     name = "CMS", 
+                     show_heatmap_legend = F, 
+                    column_title_rot = 90,
+                     row_names_gp = gpar(fontsize = 8),
+                     width = unit(3, "mm"),
+                     column_title_side ="bottom",
+                     column_title = "up in CMS")
+
+pdf( file = paste0( projHome, "analyses/plots/COAD_miR_rc_vst_BR_RFall_top10DOWNstatDEmiR_miRmeanImp80x_heatmap.pdf"),
+     onefile = TRUE, height=24, width=18 )
+print(htFirst+htSecond+htThird)
+dev.off() #
+
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
