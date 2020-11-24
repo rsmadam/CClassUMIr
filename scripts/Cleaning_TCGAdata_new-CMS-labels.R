@@ -4,7 +4,9 @@ library(readxl)
 library("DESeq2")
 library("AnnotationDbi")
 library("org.Hs.eg.db")
-plotDir <- "/Users/ronjaadam/projects/miRNA_mCRC/miRNA classifier/analyses/plots/"
+plotDir <- "/Users/ronjaadam/projects/miRNA_mCRC/CMS-miRaCl/analyses/plots/"
+projDir <- "/Users/ronjaadam/projects/miRNA_mCRC/CMS-miRaCl/"
+
 #function needed 
 quantile_normalisation <- function(df){
   df_rank <- apply(df,2,rank,ties.method="min")
@@ -55,7 +57,7 @@ clinical.coad <- GDCquery_clinic(project = c("TCGA-COAD"), type = "clinical")
 #                               as.character(clinical$submitter_id))]
 # CMS_samples$read <- clinical.coad$tissue_or_organ_of_origin[match(CMS_samples$SampleId,
 #                                                 as.character(clinical$submitter_id))]
-oldRowNames <- rownames(read.table("/Users/ronjaadam/projects/miRNA_mCRC/miRNA classifier/Data/TCGA-COAD-allRNA-01Aonly-RSEM-ComBat.csv",
+oldRowNames <- rownames(read.table(paste0(projDir,"/Data/TCGA-COAD-allRNA-01Aonly-RSEM-ComBat.csv"),
                                    header = T)) ##genes
 rownames(clinical.coad) <- clinical.coad$submitter_id
 # query.exp <- GDCquery(project = c("TCGA-COAD"), 
@@ -118,9 +120,9 @@ rownames(clinical.coad) <- clinical.coad$submitter_id
 #             "/Users/ronjaadam/projects/miRNA_mCRC/miRNA classifier/Data/TCGA-COAD-allRNA-01Aonly_CMS-labels.csv")
 # write.csv(TCGARnaseqDF.COAD,
 #             "/Users/ronjaadam/projects/miRNA_mCRC/miRNA classifier/Data/TCGA-COAD-mRNA-GA-HiSeq_scaled_estimate_01Aonly_BR.csv")
-TCGARnaseqDF.COAD <- read.csv("/Users/ronjaadam/projects/miRNA_mCRC/miRNA classifier/Data/TCGA-COAD-mRNA-GA-HiSeq_scaled_estimate_01Aonly_BR.csv",
+TCGARnaseqDF.COAD <- read.csv(paste0(projDir,"/Data/TCGA-COAD-mRNA-GA-HiSeq_scaled_estimate_01Aonly_BR.csv"),
                                    row.names = 1)
-predictedCMS.COAD <- read.csv("/Users/ronjaadam/projects/miRNA_mCRC/miRNA classifier/Data/TCGA-COAD-allRNA-01Aonly_CMS-labels.csv",
+predictedCMS.COAD <- read.csv(paste0(projDir, "/Data/TCGA-COAD-allRNA-01Aonly_CMS-labels.csv"),
                     row.names = 1)
 
 
@@ -183,6 +185,8 @@ library(TCGAbiolinks)
 #                           miR_COAD_vst$CMS.guin & miR_COAD_vst$CMS.guin==
 #                           miR_COAD_vst$CMS.lv)] <- NA #keep only samples where the predictions were the same
 # write.table(miR_COAD_vst, "/Users/ronjaadam/projects/miRNA_mCRC/miRNA classifier/Data/miR_COAD_vst_CMS.txt")
+miR_COAD_vst <- read.table( "Data/miR_COAD_vst_CMS.txt") #here the outliers and non-classifiable are still in but the normal/extra samples are out
+
 # ### batch effect removal (AA batch is different)
 # #limma was suggested also by Michael Love, https://support.bioconductor.org/p/76099/
 # #rc_CMS <- relevel(rc_CMS, "CMS2")
@@ -324,18 +328,18 @@ library(TCGAbiolinks)
 # 
 # write.table(rc_vst_BR, "/Users/ronjaadam/projects/miRNA_mCRC/miRNA classifier/Data/rc_vst_BR-outl_mostVar-highlyCorr.txt")
 
-rc_vst_BR <- read.table("/Users/ronjaadam/projects/miRNA_mCRC/miRNA classifier/Data/rc_vst_BR-outl_mostVar-highlyCorr.txt")
+rc_vst_BR <- read.table(paste0(projDir,"/Data/rc_vst_BR-outl_mostVar-highlyCorr.txt"))
 
-
-###### check ICGC for overlap or extra samples: ######
-icgc.coad.tx <- read.csv2("/Users/ronjaadam/projects/miRNA_mCRC/rnaseq.extended.metadata.aliquot_id.V4_colo.csv",
-          sep="\t", header = T)
-icgc.coad.tx$TCGA.patID <- sub("-01A-.*","",icgc.coad.tx$sample_id)
-icgc.coad.mir <- read.csv2("/Users/ronjaadam/projects/miRNA_mCRC/DCC_PCAWG_transcriptome_miRNA_sample_info_COAD.txt",
-                          sep="\t", header = F)
-icgc.coad.tx$TCGA.patID[which(!icgc.coad.tx$TCGA.patID %in% clinical$submitter_id & #new to TCGA set
-                                          icgc.coad.tx$submitted_donor_id %in% icgc.coad.mir$V1)] # has also miR
-#->none
+# 
+# ###### check ICGC for overlap or extra samples: ######
+# icgc.coad.tx <- read.csv2("/Users/ronjaadam/projects/miRNA_mCRC/rnaseq.extended.metadata.aliquot_id.V4_colo.csv",
+#           sep="\t", header = T)
+# icgc.coad.tx$TCGA.patID <- sub("-01A-.*","",icgc.coad.tx$sample_id)
+# icgc.coad.mir <- read.csv2("/Users/ronjaadam/projects/miRNA_mCRC/DCC_PCAWG_transcriptome_miRNA_sample_info_COAD.txt",
+#                           sep="\t", header = F)
+# icgc.coad.tx$TCGA.patID[which(!icgc.coad.tx$TCGA.patID %in% clinical$submitter_id & #new to TCGA set
+#                                           icgc.coad.tx$submitted_donor_id %in% icgc.coad.mir$V1)] # has also miR
+# #->none
 
 
 ###### get purity estimates for TCGA samples: 
@@ -345,9 +349,8 @@ purity.ABS <- read.csv2("/Users/ronjaadam/projects/miRNA_mCRC/TCGA_mastercalls.a
                                        "numeric", "numeric", "numeric", "numeric",
                                        "numeric", "factor"))
 purity.ABS$TCGA.patID <- sub("-01$","",purity.ABS$array)
-
 purity.ABS.coad <- purity.ABS[match(rc_vst_BR$Sample.ID, purity.ABS$TCGA.patID), ] 
-
+remove(purity.ABS)
 
 
 
@@ -361,7 +364,7 @@ VUdata_miR <- as.data.frame(VUdata[,] %>% dplyr::group_by(miRNA) %>%
                       .funs = sum))
 VUdata_miR$miRNA <- sub("-1_.+$","",VUdata_miR$miRNA) #crop names end from summarized isomirs
 VUdata_miR <- VUdata_miR[-grep("chr",VUdata_miR$miRNA),] #kick VU-defined miRs, they are not in TCGA anyways
-
+remove(VUdata)
 # ## some exploration on feature overlap...
 # VUdata_miR$miRNA[-which(VUdata_miR$miRNA %in% rownames(miR_COAD_comb))]
 # rownames(miR_COAD_comb)[-which(rownames(miR_COAD_comb) %in% VUdata_miR$miRNA)]
@@ -415,8 +418,8 @@ clinVU$Date <- gsub("/",".", clinVU$Date.x)
 # clinVU$Date <- factor(clinVU$Date, levels= levels(clinVU$Date),
 #                       labels = c("NA",levels(clinVU$Date)[2:27],"NA"),
 #                       ordered=T) #for checking batch effect
-clinVU$StageT <- sub("N.*","",clinVU$Stage)
-clinVU$StageM <- sub(".*M","M",clinVU$Stage)
+clinVU$StageT <- sub("N.*","",clinVU$TNM)
+clinVU$StageM <- sub(".*M","M",clinVU$TNM)
 
 ## simplify location data:
 clinVU$sampleType <- factor( clinVU$locSample,
@@ -459,7 +462,7 @@ clinVU$LRcolon <- factor(clinVU$Location, labels=c("R","R","L","R", "L",
                                                    "T" ))
 clinVU$LRcolon <- factor(clinVU$LRcolon, ordered = T,
                          levels=c("R","T", "L","Rectum",
-                                  "Met.omentum","ND" ),
+                                  "Met.omentum","xND" ),
                          labels=c("right.colon", "transv.colon","left.colon", "rectum",
                                   "Met_perit", "ND"))
 summary(clinVU$sampleType)
@@ -587,7 +590,7 @@ rownames(clinical.read) <- clinical.read$submitter_id
 # write.csv(TCGARnaseqDF.READ,
 #             "/Users/ronjaadam/projects/miRNA_mCRC/miRNA classifier/Data/TCGA-READ-mRNA-GA-HiSeq_scaled_estimate_01Aonly.csv")
 
-TCGARnaseqDF.READ <- read.csv("/Users/ronjaadam/projects/miRNA_mCRC/miRNA classifier/Data/TCGA-READ-mRNA-GA-HiSeq_scaled_estimate_01Aonly.csv",
+TCGARnaseqDF.READ <- read.csv(paste0(projDir,"/Data/TCGA-READ-mRNA-GA-HiSeq_scaled_estimate_01Aonly.csv"),
                               row.names = 1, header = T)
 colnames(TCGARnaseqDF.READ) <- gsub("\\.","-",colnames(TCGARnaseqDF.READ))
 ## get the classification from CMSclassifier package
@@ -601,7 +604,7 @@ colnames(TCGARnaseqDF.READ) <- gsub("\\.","-",colnames(TCGARnaseqDF.READ))
 #                                                                CMS_samples$SampleId)], 
 #                 CMSread.rf$predictedCMS, 
 #                 CMSread.ss$predictedCMS))
-predictedCMS.READ <- read.csv("/Users/ronjaadam/projects/miRNA_mCRC/miRNA classifier/Data/TCGA-READ-allRNA-01Aonly_CMS-labels.csv",
+predictedCMS.READ <- read.csv(paste0(projDir,"/Data/TCGA-READ-allRNA-01Aonly_CMS-labels.csv"),
                               row.names = 1)
 
 ###################
@@ -666,8 +669,7 @@ predictedCMS.READ <- read.csv("/Users/ronjaadam/projects/miRNA_mCRC/miRNA classi
 #            "/Users/ronjaadam/projects/miRNA_mCRC/miRNA classifier/Data/TCGA-miR_READ_vst_CMS-labels.csv")
 # write.csv(miR_READ_vst_BR,
 #            "/Users/ronjaadam/projects/miRNA_mCRC/miRNA classifier/Data/TCGA-miR_READ_vst_BR_CMS-labels.csv")
-miR_READ_vst_BR <- read.csv(file=
-          "/Users/ronjaadam/projects/miRNA_mCRC/miRNA classifier/Data/TCGA-miR_READ_vst_BR_CMS-labels.csv",
+miR_READ_vst_BR <- read.csv(file=paste0(projDir,"/Data/TCGA-miR_READ_vst_BR_CMS-labels.csv"),
           row.names = 1)
 
 
@@ -701,9 +703,9 @@ ggsave(paste0(plotDir,"/READ-miR_vst_tSNE_TSS_after-BR.pdf" ))
 ###### CPTAC-2: has mir-Seq and CMS from mRNA-Seq, plus clinical data, mutations etc. 
 ###### but  has no survival data
 
-query.exp <- GDCquery(project = c("CPTAC-2"), 
+query.exp <- GDCquery(project = c("CPTAC-2"),
                       data.category = "Transcriptome Profiling",
-                      data.type = "miRNA Expression Quantification", 
+                      data.type = "miRNA Expression Quantification",
                       experimental.strategy = "miRNA-Seq"
 )
 GDCdownload(query.exp)
@@ -717,7 +719,7 @@ rownames(TCGAmiR.Cptac2) <- TCGARnaseqSE$miRNA_ID
 remove(TCGARnaseqSE)
 ##TCGA data has apparently similar counts for isomirs, summarize by mean up
 TCGAmiR.Cptac2$miRcomb <- sub("-[1-9]$","",row.names(TCGAmiR.Cptac2))
-miR_Cptac_comb <- as.data.frame(TCGAmiR.Cptac2 %>% dplyr::group_by(miRcomb) %>% 
+miR_Cptac_comb <- as.data.frame(TCGAmiR.Cptac2 %>% dplyr::group_by(miRcomb) %>%
                                  dplyr::summarise_if(.predicate = function(x) is.numeric(x),
                                                      .funs = mean)) #affects around 180miRNA
 row.names(miR_Cptac_comb) <- miR_Cptac_comb$miRcomb #afterwards remove column 1
@@ -727,31 +729,32 @@ clinical.cptac <- GDCquery_clinic(project = c("CPTAC-2"), type = "clinical")
 cptac.ids <- data.frame("coln"=colnames(miR_Cptac_comb),
                         "subm"=NA)
 for(i in 1:length(colnames(miR_Cptac_comb))){
-cptac.ids$subm[i] <- as.character(clinical.cptac$submitter_id[ grep(colnames(miR_Cptac_comb)[i], 
+cptac.ids$subm[i] <- as.character(clinical.cptac$submitter_id[ grep(colnames(miR_Cptac_comb)[i],
      as.character(clinical.cptac$submitter_sample_ids) ) ])
 }
 colnames(miR_Cptac_comb)==cptac.ids$coln
 
-clinSupp.cptac <- read.table("/Users/ronjaadam/projects/miRNA_mCRC/miRNA classifier/Data/Vasaikar_CPTAC2_STable1_mmc1.txt", 
+clinSupp.cptac <- read.table(paste0(projDir,"/Data/Vasaikar_CPTAC2_STable1_mmc1.txt"), 
                              sep="\t", header = T)
-##normalize, in right direction for RF
-miR_Cptac_vst <- as.data.frame( t( varianceStabilizingTransformation( 
-  as.matrix( round( miR_Cptac_comb[, which( cptac.ids$subm %in% clinSupp.cptac$SampleID ) ] ##only the subset from the publication suppl clin data
-, 0 ) ) ) ) )
-colnames(miR_Cptac_vst) <- gsub("-", ".", colnames(miR_Cptac_vst)) # format mir names for RF
-
-miR_Cptac_qn <- as.data.frame( t( quantile_normalisation( miR_Cptac_comb[, 
-                                   which( cptac.ids$subm %in% clinSupp.cptac$SampleID ) ] ##only the subset from the publication suppl clin data
-                    ) ) )
-colnames(miR_Cptac_qn) <- gsub("-", ".", colnames(miR_Cptac_qn)) # format mir names for RF
-
 clinSupp.cptac$sample.label <- cptac.ids$coln[match(clinSupp.cptac$SampleID,
                                                     cptac.ids$subm)]
 rownames(clinSupp.cptac) <- clinSupp.cptac$SampleID
 
+# ##normalize, in right direction for RF
+# miR_Cptac_vst <- as.data.frame( t( varianceStabilizingTransformation( 
+#   as.matrix( round( miR_Cptac_comb[, which( cptac.ids$subm %in% clinSupp.cptac$SampleID ) ] ##only the subset from the publication suppl clin data
+# , 0 ) ) ) ) )
+# colnames(miR_Cptac_vst) <- gsub("-", ".", colnames(miR_Cptac_vst)) # format mir names for RF
+# 
+# miR_Cptac_qn <- as.data.frame( t( quantile_normalisation( miR_Cptac_comb[, 
+#                                    which( cptac.ids$subm %in% clinSupp.cptac$SampleID ) ] ##only the subset from the publication suppl clin data
+#                     ) ) )
+# colnames(miR_Cptac_qn) <- gsub("-", ".", colnames(miR_Cptac_qn)) # format mir names for RF
+clinSupp.cptac <- clinSupp.cptac[which(clinSupp.cptac$sample.label %in% rownames(miR_Cptac_vst)),]
+
 write.csv(miR_Cptac_vst,
-          "/Users/ronjaadam/projects/miRNA_mCRC/miRNA classifier/Data/TCGA-miR_CPTAC_vst.csv")
-miR_Cptac_vst <- read.csv(file="/Users/ronjaadam/projects/miRNA_mCRC/miRNA classifier/Data/TCGA-miR_CPTAC_vst.csv",
+          paste0(projDir,"/Data/TCGA-miR_CPTAC_vst.csv"))
+miR_Cptac_vst <- read.csv(file=paste0(projDir,"/Data/TCGA-miR_CPTAC_vst.csv"),
                             row.names = 1)
 
 
