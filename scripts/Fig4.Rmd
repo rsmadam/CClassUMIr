@@ -1,0 +1,185 @@
+---
+title: "CMS-miRaCl_Fig4"
+output: html_document
+---
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+```{r}
+#### for COAD ####
+library(survival)
+library(survminer)
+library(RTCGA.clinical)
+paletteCMS=c( "#E79E1B", 
+              "#0071B1", 
+             "#C45597",#Guinney:"#C977A4", 
+              "#009C74")
+paletteCMSn=c("CMS1" ="#E79E1B", 
+              "CMS2"= "#0071B1", 
+              "CMS3"= "#C45597",#Guinney:"#C977A4", 
+              "CMS4"="#009C74",
+              "NOLBL"="#d3d3d3")
+
+# ### analyse TCGA survival colon dataset
+# rc_vst_surv <- cbind(clinical.coad[ match(rownames(rc_vst_BR), clinical.coad$submitter_id), ], 
+#                      "CMS"=factor(rc_vst_BR$CMS, ordered=T))
+#TODO: reproduce surv curves with 445 samples instead, using CMS.lv and CMS.guin 
+rc_vst_surv <- cbind(clinical.coad[ match(rownames(miR_COAD_vst), clinical.coad$submitter_id), ], 
+                      "CMS"=factor(miR_COAD_vst$CMS.lv, ordered=T))
+
+# create vector time to death containing values to censor for death
+rc_vst_surv$OS <- as.numeric( apply(rc_vst_surv, 1, function(x) { ifelse( is.na( x["days_to_death"] ),
+                                 x["days_to_last_follow_up"],
+                                 x["days_to_death"] )}) )
+
+# create death censoring
+rc_vst_surv$Event_OS <- ifelse(rc_vst_surv$vital_status == 'Alive', 0, 1)
+
+fit <- survfit(Surv(OS, Event_OS) ~ CMS,
+               data = rc_vst_surv[])
+
+# visualize with survminer
+pdf(paste0(plotDir,
+           "Fig4_SURV_COAD-rc-vst-445-cms-lv.pdf"),
+    width=6, height=7, onefile = F)
+print( ggsurvplot(fit, data = rc_vst_surv, risk.table = TRUE, pval = T,
+           palette =  paletteCMS, surv.median.line = "hv", pval.method = T,
+           xlim= c(0,2500)) )
+dev.off()
+
+rc_vst_surv_st23 <- rc_vst_surv[grep(" iv[a-c]?$",rc_vst_surv$tumor_stage, perl = T),]
+summary(factor(rc_vst_surv_st23$tumor_stage))
+#reduce to stage ii/iii
+fit <- survfit(Surv(OS, Event_OS) ~ CMS,
+               data = rc_vst_surv_st23)
+
+# visualize with survminer
+pdf(paste0(plotDir,
+           "Fig4a_SURV_COAD-rc-vst-445-cms-lv_stage4.pdf"),
+    width=6, height=7, onefile = F)
+ggsurvplot(fit, data = rc_vst_surv_st23,
+           risk.table = TRUE, pval = T,
+           palette =  paletteCMS, surv.median.line = "hv",
+           xlim= c(0,2500)) 
+dev.off()
+
+```
+
+
+
+```{r}
+#### for READ ####
+
+### get TCGA survival rectal dataset
+pred_read_RF <- read.csv2(paste0(projDir, "analyses/tables/READ_predicted_RF-all_RF-20.csv"),
+                          row.names = 1)
+
+read_rc_vst_surv <- cbind(clinical.read[ match(rownames(miR_READ_vst_BR), 
+                                               clinical.read$submitter_id), ], 
+                          "CMS"=factor(miR_READ_vst_BR$CMS, ordered=T))
+
+read_rc_vst_surv$OS <- clinical.read$days_to_last_follow_up[ match(rownames(miR_READ_vst_BR), 
+                                                                   clinical.read$submitter_id) ]
+read_rc_vst_surv$Event_OS <- ifelse(read_rc_vst_surv$vital_status=="Alive", 0, 1) #Surv takes 0 as alive and 1 as dead
+read_rc_vst_surv$OS[which(read_rc_vst_surv$Event_OS == 1 )] <- read_rc_vst_surv$days_to_death[which(read_rc_vst_surv$Event_OS == 1 )]
+
+fit <- survfit(Surv(OS, Event_OS) ~ CMS,
+               data = read_rc_vst_surv)
+
+# visualize with survminer
+pdf(paste0(plotDir,
+           "Fig4_SURV_READ-cms.pdf"),
+    width=6, height=7)
+print( ggsurvplot(fit, data = read_rc_vst_surv, risk.table = TRUE, pval = T,
+           palette =  paletteCMS, surv.median.line = "hv", pval.method = T,
+           xlim= c(0,2500)) )
+dev.off()
+
+
+```
+
+
+```{r}
+
+#### with VU data (looks different because of the high amount of stage IV) ####
+clinVU <- read.csv2(paste0(projDir, "analyses/tables/VUclin-predictedCMS_RF-all_RF-20.csv")) #from different classifier
+pred_VU_RF <- read.csv2(paste0(projDir, "analyses/tables/VU_predicted_RF-all_RF-20.csv"), row.names = 1) #from all VUsamples
+clinVU$CMS <- pred_VU_RF$CMS[match(clinVU$sampleID, pred_VU_RF$SampleID)]
+clinVU$CMS_20 <- pred_VU_RF$CMS_20[match(clinVU$sampleID, pred_VU_RF$SampleID)]
+
+#event: in OS analyisi 0=alive, 1=dead, people with 0, meaning without Death/event will be censored 
+clinVU$Event_PFS <- ifelse(clinVU$PFS_1==clinVU$OS & clinVU$Event_OS==0, 0, 1) 
+#if OS=PFS patient alive at end of study or dropped out from any cause -> censor that 3 patients
+clinVU$Event_PFS[is.na(clinVU$PFS_1)] <- NA
+
+## OS VU RF-all
+fit_VU <- survfit(Surv(OS, Event_OS) ~ CMS,
+               data = clinVU[
+                 which(grepl("prim",
+                       clinVU$sampleType)),]) 
+# visualize with survminer
+pdf(paste0(plotDir,
+           "Fig4_VU_vst_primary_RF-all_survOS.pdf"),
+    width=6, height=7, onefile = F)
+print( ggsurvplot(fit_VU, data = clinVU[
+  which(grepl("prim", clinVU$sampleType)),
+                              c( "OS", "Event_OS", "CMS")], 
+           risk.table = TRUE, pval = T,  xlim=c(0,2000),
+           palette = paletteCMS[] ))
+dev.off()
+
+## PFS VU RF-all
+fit_VU <- survfit(Surv(PFS_1, Event_PFS) ~ CMS, #OS, Event_OS
+               data = clinVU[#grepl("Oxaliplatin", clinVU$Scheme_for_analysis),])#
+                 which(#clinVU$CMS_20 %in% c("CMS2", "CMS4")
+                 #grepl("tachroon", clinVU$Syn_metachroom)
+                # &
+               grepl("prim",#allMet #"[S][0-9]", #only survival cohort
+                       clinVU$sampleType)),]) #[grep("P[0-9]", t_VU_rc_vst_surv$Sample.ID),]
+# visualize with survminer
+pdf(paste0(plotDir,
+           "Fig4_VU_vst_primary_RF-all_survPFS.pdf"),
+    width=6, height=7, onefile = F)
+print( ggsurvplot(fit_VU, data = clinVU[#grepl("Oxaliplatin", clinVU$Scheme_for_analysis),#
+  which(#clinVU$CMS_20 %in% c("CMS2", "CMS4") &
+           grepl("prim", clinVU$sampleType)), #
+                                                 #grepl("tachroon", clinVU$Syn_metachroom)),
+                              c( "PFS_1", "Event_PFS", "CMS")], #"OS", "Event_OS",
+           risk.table = TRUE, pval = T, xlim=c(0,1500),
+           palette = paletteCMS[] ))#"#4F2776" #c("#2a7886","#79bac1" ))# 
+dev.off()
+
+
+VU_vst_surv <- cbind(clinVU, VU_rc_vst)#[,c("hsa.mir.625", "hsa.mir.592", "hsa.mir.552", 
+           #"hsa.mir.218", "hsa.mir.31", "hsa.mir.375", "hsa.mir.143")])
+surv_object <- Surv(time = VU_vst_surv$OS, 
+                    event = VU_vst_surv$Event_OS)
+fit.coxph <- coxph(surv_object ~
+                  hsa.mir.625 + hsa.mir.592 + hsa.mir.552 +
+                    hsa.mir.218 + hsa.mir.31 + hsa.mir.375 +
+                    hsa.mir.143 +hsa.mir.615 + hsa.mir.335 +
+                    hsa.mir.146b,
+                   data = VU_vst_surv)
+ggforest(fit.coxph, data = VU_vst_surv)
+ggsave(paste0(plotDir,"VU_Surv-forest_top10.pdf"), 
+       height = 9, width=5)
+
+
+```
+
+
+
+
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

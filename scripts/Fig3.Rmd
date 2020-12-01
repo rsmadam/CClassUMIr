@@ -1,0 +1,104 @@
+---
+title: "Figure 3"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
+
+```{r}
+#### plot of the importances
+N_imp_RF_df <- data.frame("importance"=importances_df$Overall,
+                          "variable"=rownames(importances_df))
+head( N_imp_RF_df, 30 ) %>%
+  ggplot(aes(x = reorder(variable, -importance), 
+             y = importance, fill = importance)) +
+  geom_bar(stat = "identity" ) +
+  scale_fill_gradientn(colours=brewer.pal(9, "Purples")[3:9]) +
+  theme_minimal() +  
+  theme(axis.text.x=element_text(angle = 90, hjust = 1, vjust = 0.5, size=15),
+        axis.title=element_text(size=18),
+        axis.text.y=element_text(size=15),
+        legend.position="none")
+
+ggsave(paste0(plotDir,"Fig3_30importances-100cv-purples.pdf"), width=7, height=4)
+
+```
+
+
+
+```{r}
+head(N_imp_RF_df, 6)
+##plot density distribution
+for(i in c("hsa.mir.625", "hsa.mir.592", "hsa.mir.552", 
+           "hsa.mir.218", "hsa.mir.31", "hsa.mir.375", "hsa.mir.143",
+           "hsa.mir.615", "hsa.mir.335", 
+           "hsa.mir.146b")){
+ggplot( rc_vst_BR, aes_string( x=i) ) + 
+  geom_density( aes( group=CMS, colour=CMS, fill=CMS ), alpha=0.3 ) +
+  scale_fill_manual( values = paletteCMSn ) +
+  scale_color_manual( values = paletteCMSn ) +
+  theme_minimal( ) +
+  theme(axis.text=element_text(size=20),
+        axis.title=element_text(size=25),
+        legend.position="none")
+ggsave(paste0(plotDir,"Fig3_density_", i, ".pdf"))
+}
+
+```
+
+
+```{r}
+library(survival)
+library(survminer)
+library(RTCGA.clinical)
+paletteCMS=c( "#E79E1B", 
+              "#0071B1", 
+             "#C45597",#Guinney:"#C977A4", 
+              "#009C74")
+paletteCMSn=c("CMS1" ="#E79E1B", 
+              "CMS2"= "#0071B1", 
+              "CMS3"= "#C45597",#Guinney:"#C977A4", 
+              "CMS4"="#009C74",
+              "NOLBL"="#d3d3d3")
+
+### analyse TCGA survival colon dataset
+rc_vst_surv <- cbind(clinical.coad[ match(rownames(rc_vst_BR), clinical.coad$submitter_id), ], 
+                     "CMS"=factor(rc_vst_BR$CMS, ordered=T))
+# create vector time to death containing values to censor for death
+rc_vst_surv$OS <- as.numeric( apply(rc_vst_surv, 1, function(x) { ifelse( is.na( x["days_to_death"] ),
+                                 x["days_to_last_follow_up"],
+                                 x["days_to_death"] )}) )
+rc_vst_surv$Event_OS <- ifelse(rc_vst_surv$vital_status=="Alive", 0, 1) #Surv takes 0 as alive and 1 as dead
+
+# Fit a Cox proportional hazards model
+# rc_vst_surv$CMS1 <- factor(ifelse(rc_vst_surv$CMS=="CMS1", "CMS1", "other"))
+# rc_vst_surv$CMS2 <- factor(ifelse(rc_vst_surv$CMS=="CMS2", "CMS2", "other"))
+# rc_vst_surv$CMS3 <- factor(ifelse(rc_vst_surv$CMS=="CMS3", "CMS3", "other"))
+# rc_vst_surv$CMS4 <- factor(ifelse(rc_vst_surv$CMS=="CMS4", "CMS4", "other"))
+rc_vst_surv <- cbind(rc_vst_surv, rc_vst_BR[,c("hsa.mir.625", "hsa.mir.592", "hsa.mir.552", 
+           "hsa.mir.218", "hsa.mir.31", "hsa.mir.375", "hsa.mir.143",  
+          "hsa.mir.615", "hsa.mir.335", "hsa.mir.146b")])
+surv_object <- Surv(time = rc_vst_surv$OS, 
+                    event = rc_vst_surv$Event_OS)
+fit.coxph <- coxph(surv_object ~ hsa.mir.625 + hsa.mir.592 + hsa.mir.552 +
+                    hsa.mir.218 + hsa.mir.31 + hsa.mir.375 +
+                    hsa.mir.143 + hsa.mir.615,# + hsa.mir.335 +
+                    #hsa.mir.146b ,
+                   data = rc_vst_surv)
+ggforest(fit.coxph, data = rc_vst_surv)
+ggsave(paste0(plotDir,"Fig3_Surv-forest_top8_deathFollowupcombined.pdf"), 
+       height = 7, width=5)
+
+
+```
+
+
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Cmd+Option+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Cmd+Shift+K* to preview the HTML file). 
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+

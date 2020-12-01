@@ -13,10 +13,16 @@ library(RColorBrewer)
 library(wesanderson)
 library(ggsci)
 library(factoextra)
+library(circlize)
+library(ComplexHeatmap)
+library(ggpubr)
+library(pheatmap)
+library(viridis)
+
 
 #install.packages('e1071', dependencies=TRUE)
 set.seed(67)
-plotDir <- "/Users/ronjaadam/projects/miRNA_mCRC/miRNA classifier/analyses/plots/"
+plotDir <- "/Users/ronjaadam/projects/miRNA_mCRC/CMS-miRaCl/analyses/plots/"
 
 # ##################################################################################################################################      
 
@@ -383,7 +389,7 @@ importances_df <- read.csv("analyses/tables/val_100x5cv_10x10cv_importances.csv"
 
 
 #### create RF for all samples ####
-
+set.seed(5678) 
 bigContr <- trainControl(
   method = "repeatedcv",
   number = 10,
@@ -395,39 +401,41 @@ bigContr <- trainControl(
   savePredictions = F
 )
 ### big RF 
-model_RF_train_all <- caret::train(CMS~., 
-                               data=rc_vst_BR[ ,c(grep("hsa", colnames(rc_vst_BR), value = T)
-                                   , "CMS")],
-                               method="ranger", 
-                               importance = 'impurity',
-                               metric="Kappa", 
-                               tuneGrid= tuneGrid, 
-                               num.trees = 2000, #2000 is best with 5 and 5 
-                               trControl= bigContr)
-best_mtry <- model_RF_train_all$bestTune$mtry
-best_nnode <- model_RF_train_all$bestTune$min.node.size
+set.seed(5678) 
+# model_RF_train_all <- caret::train(CMS~., 
+#                                data=rc_vst_BR[ ,c(grep("hsa", colnames(rc_vst_BR), value = T)
+#                                    , "CMS")],
+#                                method="ranger", 
+#                                importance = 'impurity',
+#                                metric="Kappa", 
+#                                tuneGrid= tuneGrid, 
+#                                num.trees = 2000, #2000 is best with 5 and 5 
+#                                trControl= bigContr)
+best_mtry <- 25 #model_RF_train_all$bestTune$mtry #
+best_nnode <- 10 #model_RF_train_all$bestTune$min.node.size #
 bestParam <- expand.grid("mtry" = best_mtry, # after identifying by grid search representative 10fCV, test different ntrees and classweight combis
                          "splitrule" = "gini",
                          "min.node.size" = best_nnode)
 ### small RF 20 
-model_RF_20_train_all <- caret::train(CMS~., 
-                                      data=rc_vst_BR[
-                                        ,c(rownames(importances_df[1:20,])
-                                           , "CMS")],
-                                      method="ranger", 
-                                      importance = 'impurity',
-                                      metric="Kappa", 
-                                      tuneGrid= miniGrid,
-                                      num.trees = 2000, 
-                                      trControl= bigContr)
-best_mtry_20 <- model_RF_20_train_all$bestTune$mtry
-best_nnode_20 <- model_RF_20_train_all$bestTune$min.node.size
+set.seed(5678) 
+# model_RF_20_train_all <- caret::train(CMS~., 
+#                                       data=rc_vst_BR[
+#                                         ,c(rownames(importances_df[1:20,])
+#                                            , "CMS")],
+#                                       method="ranger", 
+#                                       importance = 'impurity',
+#                                       metric="Kappa", 
+#                                       tuneGrid= miniGrid,
+#                                       num.trees = 2000, 
+#                                       trControl= bigContr)
+best_mtry_20 <- 2 #model_RF_20_train_all$bestTune$mtry #
+best_nnode_20 <- 10 #model_RF_20_train_all$bestTune$min.node.size #
 bestParam_20 <- expand.grid("mtry" = best_mtry_20, # after identifying by grid search representative 10fCV, test different ntrees and classweight combis
                          "splitrule" = "gini",
                          "min.node.size" = best_nnode_20)
 
 set.seed(5678) 
-myFolds <- createFolds(rc_vst_BR$CMS, k = 10, returnTrain = T) #representative samples
+myFolds <- createFolds(rc_vst_BR$CMS, k = 100, returnTrain = T) #representative samples
 testingContr <- trainControl(
   index = myFolds, #use updated myFolds 
   classProbs = T, #class probabilities for held-out samples during resample
@@ -443,7 +451,7 @@ model_RF_best_all <- caret::train(CMS~.,
                               tuneGrid= bestParam, 
                               num.trees = 2000, #2000 is best with 5 and 5 
                               trControl= testingContr)
-
+set.seed(5678) 
 model_RF_20_best_all <- caret::train(CMS~., 
                                   data=rc_vst_BR[
                                     c(rownames(importances_df[1:20,]),
@@ -640,14 +648,16 @@ draw(Heatmap(t(data.frame(mRNA21.clin$CMSmRNA, miR22.clin$CMSmir)),
 
 ##############################
 #### CPTAC-2
-miR_Cptac_vst_scale <- data.frame(t(scale(t(miR_Cptac_vst[,]))))
+#miR_Cptac_vst_scale <- data.frame(t(scale(t(miR_Cptac_vst[,]))))
 pred_cptec_RF <- predict(model_RF_20_best_all,
-                        newdata = miR_Cptac_vst,
+                        newdata = miR_Cptac_vst, 
                         type = "prob")
 rownames(pred_cptec_RF) <- rownames(miR_Cptac_vst)
+pred_cptec_RF$d2ndProb <- apply(pred_cptec_RF, 1, diffSecond)
+pred_cptec_RF$d2ndClass <- apply(pred_cptec_RF[,1:4], 1, theSecond)
 pred_cptec_RF$CMS <- predict(model_RF_20_best_all,
-                         newdata = miR_Cptac_vst,
-                         type = "raw")
+                             newdata = miR_Cptac_vst, #rpm_vst slightly better than raw_qn with RF20 (RF20 better than RF)
+                             type = "raw")
 summary(pred_cptec_RF$CMS)
 
 clinSupp.cptac$CMSmir <- pred_cptec_RF$CMS[match(clinSupp.cptac$sample.label, 
@@ -714,22 +724,9 @@ clinSupp.cptac$Event_OS <- ifelse(clinSupp.cptac$Vital.Status=="Deceased", 1, 0)
 #######################
 ##### READ data 
 library(RColorBrewer)
-confusionM.READ <- data.frame("CMS1.mRNA"=c(4,0,0,0),
-                     "CMS2.mRNA"=c(0,31,1,14),
-                     "CMS3.mRNA"=c(1,2,8,1),
-                     "CMS4.mRNA"=c(0,2,0,25))
-confusionM.CPTAC <- data.frame("CMS1.mRNA"=c(7,1,3,2),
-                              "CMS2.mRNA"=c(0,25,0,8),
-                              "CMS3.mRNA"=c(2,4,6,4),
-                              "CMS4.mRNA"=c(1,4,0,17))
-rownames(confusionM.CPTAC)<-paste0("CMS", 1:4, "miR") 
-pheatmap(as.matrix(confusionM.CPTAC), 
-         cluster_rows = F,
-         cluster_cols = F, 
-         color= brewer.pal(n = 9, name = "Blues"),
-         )
+
 miR_READ_vst_BR <- read.csv(file=
-                              "/Users/ronjaadam/projects/miRNA_mCRC/miRNA classifier/Data/TCGA-miR_READ_vst_BR_CMS-labels.csv",
+                              "/Data/TCGA-miR_READ_vst_BR_CMS-labels.csv",
                             row.names = 1)
 miR_READ_vst
 selREAD <- 1:length(miR_READ_vst_BR$CMS.cl.rf)#which(  
@@ -773,9 +770,27 @@ rownames(pred_read_RF) <- rownames(miR_READ_vst_BR[selREAD,])
 pred_read_RF$Sample.ID <-row.names(pred_read_RF)
 summary(pred_read_RF$CMS_20)
 confusionMatrix(pred_read_RF$CMS, factor(miR_READ_vst_BR$CMS.lv[selREAD]))
-confusionMatrix(pred_read_RF$CMS, factor(miR_READ_vst_BR$CMS.cl.rf[selREAD]))
 confusionMatrix(pred_read_RF$CMS_20, factor(miR_READ_vst_BR$CMS.lv[selREAD]))
-confusionMatrix(pred_read_RF$CMS_20, factor(miR_READ_vst_BR$CMS.cl.rf[selREAD]))
+
+# confusionM.READ <- data.frame("CMS1.mRNA"=c(4,0,0,0),
+#                               "CMS2.mRNA"=c(0,31,1,14),
+#                               "CMS3.mRNA"=c(1,2,8,1),
+#                               "CMS4.mRNA"=c(0,2,0,25))
+# confusionM.CPTAC <- data.frame("CMS1.mRNA"=c(7,1,3,2),
+#                                "CMS2.mRNA"=c(0,25,0,8),
+#                                "CMS3.mRNA"=c(2,4,6,4),
+#                                "CMS4.mRNA"=c(1,4,0,17))
+#rownames(confusionM.CPTAC)<-paste0("CMS", 1:4, "miR") 
+confusionM.READ <- confusionMatrix(pred_read_RF$CMS, 
+                                   factor(miR_READ_vst_BR$CMS.lv[selREAD]))[["table"]]
+rownames(confusionM.READ) <- paste0("CMS", 1:4, "miR") 
+colnames(confusionM.READ) <- paste0("CMS", 1:4, "mRNA") 
+
+pheatmap(as.matrix(confusionM.READ), 
+         cluster_rows = F,
+         cluster_cols = F, 
+         color= brewer.pal(n = 9, name = "Purples"),
+)
 
 ## plot: what are the READ predictions
 data.frame("CMS"=pred_read_RF$CMS) %>%#
@@ -811,6 +826,24 @@ concREAD <- data.frame("CMS"=factor(c(miR_READ_vst_BR[selREAD , "CMS.lv"],
 #     width=12, height=3)
 
 #### overlap READ samples mRNA vs mirNA
+concREAD$CMS <- as.numeric(sub("CMS", "", concREAD$CMS))
+concREAD$CMS <- factor(paste0("CMS", concREAD$CMS))
+
+wideREAD <- reshape(concREAD, direction="wide", 
+                    idvar="pat", timevar = "type", v.names = "CMS")
+
+library("ggalluvial")
+ggplot(as.data.frame(wideREAD),
+       aes(axis1 = CMS.mRNA, axis3 =CMS.miR, axis2 = CMS.miR_RF_20)) +
+  geom_alluvium(aes(fill = CMS.mRNA), width = 1/12) +
+  geom_stratum(width = 1/12, fill = "black", color = "grey") +
+  scale_x_discrete(limits = c("mRNA", "miR_RF20", "miR"), expand = c(.05, .05)) +
+  scale_fill_manual(values = paletteCMSn) +
+  theme_minimal() + 
+  ggtitle("READ mRNA vs. miR CMS")
+ggsave(paste0(plotDir, "READ_alluvial_RF20.pdf"))
+
+##make dataframe for heatmap 
 concREAD$CMS <- as.numeric(sub("CMS", "", concREAD$CMS))
 wideREAD <- reshape(concREAD, direction="wide", 
                     idvar="pat", timevar = "type", v.names = "CMS")
@@ -878,24 +911,6 @@ draw(Heatmap(t(wideREAD[,c("CMS.mRNA", "CMS.miR", "CMS.miR_RF_20", "d2ndClass")]
 ))
 dev.off()
 
-ggplot(wideREAD, aes(CMS.miR, d2ndProb) ) + 
-  geom_boxplot(aes(group = CMS.miR, fill=factor(CMS.miR))) +
-  scale_fill_manual(values=paletteCMS, name="CMS") +
-  theme_minimal()
-ggsave(paste0(plotDir, "bestRF_all_classProb-Difference-by-CMS_boxplot.pdf"))
-
-ggplot(wideREAD, aes(purity, d2ndProb) ) + 
-  geom_point(aes(col=factor(wideREAD$CMS.miR)))+
-  facet_grid(wideREAD$CMS.miR) +
-  scale_colour_manual(values=paletteCMS, name="CMS") +
-  scale_fill_manual(values=paletteCMS, name="CMS") +
-  theme_minimal() +
-  geom_smooth(aes(color=factor(wideREAD$CMS.miR), 
-                  fill=factor(wideREAD$CMS.miR)), 
-              method = "lm", show.legend = F) +
-  stat_cor()
-ggsave(paste0(plotDir, "bestRF_all_Purity-vs-classProbDifference-by-CMS.pdf"),
-       width=4, height=6)
 
 ggplot(wideREAD, aes(-mRNApredPval, d2ndProb) ) + 
   geom_point(aes(col=factor(wideREAD$CMS.miR)))+
@@ -947,8 +962,6 @@ N_imp_RF_df <- tibble(variable = rownames(N_imp_RF),
 "PuBu"
 "PuRd"
 "Greens"
-
-
 head( N_imp_RF_df, 30 ) %>%
   ggplot(aes(x = reorder(variable, -importance), 
              y = importance, fill = importance)) +
@@ -1093,11 +1106,12 @@ paletteCMS=c( "#E79E1B",
               "#0071B1", 
              "#C45597",#Guinney:"#C977A4", 
               "#009C74")
-paletteCMSn=c("CMS1" ="#E79E1B", 
-             "CMS2"= "#0071B1", 
-             "CMS3"= "#C45597",#Guinney:"#C977A4", 
-              "CMS4"="#009C74")
 
+paletteCMSn=c("CMS1" ="#E79E1B", 
+              "CMS2"= "#0071B1", 
+              "CMS3"= "#C45597",#Guinney:"#C977A4", 
+              "CMS4"="#009C74",
+              "NOLBL"="#d3d3d3")
 
 
 

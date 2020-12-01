@@ -350,6 +350,7 @@ purity.ABS <- read.csv2("/Users/ronjaadam/projects/miRNA_mCRC/TCGA_mastercalls.a
                                        "numeric", "factor"))
 purity.ABS$TCGA.patID <- sub("-01$","",purity.ABS$array)
 purity.ABS.coad <- purity.ABS[match(rc_vst_BR$Sample.ID, purity.ABS$TCGA.patID), ] 
+purity.ABS.read <- purity.ABS[match(rownames(miR_READ_vst_BR), purity.ABS$TCGA.patID), ] 
 remove(purity.ABS)
 
 
@@ -711,10 +712,9 @@ query.exp <- GDCquery(project = c("CPTAC-2"),
 GDCdownload(query.exp)
 getResults(query.exp )
 TCGARnaseqSE <- GDCprepare(query= query.exp, summarizedExperiment = F, save = F)
-# write.csv(TCGARnaseqSE, "/Users/ronjaadam/projects/miRNA_mCRC/miRNA classifier/Data/CPTAC2_GDCquery_miRNA-Seq_SE.csv",
-#           row.names = F)
-TCGAmiR.Cptac2 <- TCGARnaseqSE[,grep("read_count_", colnames(TCGARnaseqSE)) ] #or reads_per_million_miRNA_mapped_ for normalized_results
-colnames(TCGAmiR.Cptac2) <- sub("read_count_","",colnames(TCGAmiR.Cptac2))
+TCGARnaseqSE <- read.csv("./Data/CPTAC2_GDCquery_miRNA-Seq_SE.csv")
+TCGAmiR.Cptac2 <- TCGARnaseqSE[,grep("reads_per_million_miRNA_mapped_", colnames(TCGARnaseqSE)) ] #read_count_ or reads_per_million_miRNA_mapped_ for normalized_results
+colnames(TCGAmiR.Cptac2) <- sub("reads_per_million_miRNA_mapped_","",colnames(TCGAmiR.Cptac2))
 rownames(TCGAmiR.Cptac2) <- TCGARnaseqSE$miRNA_ID
 remove(TCGARnaseqSE)
 ##TCGA data has apparently similar counts for isomirs, summarize by mean up
@@ -752,9 +752,9 @@ rownames(clinSupp.cptac) <- clinSupp.cptac$SampleID
 # colnames(miR_Cptac_qn) <- gsub("-", ".", colnames(miR_Cptac_qn)) # format mir names for RF
 clinSupp.cptac <- clinSupp.cptac[which(clinSupp.cptac$sample.label %in% rownames(miR_Cptac_vst)),]
 
-write.csv(miR_Cptac_vst,
-          paste0(projDir,"/Data/TCGA-miR_CPTAC_vst.csv"))
-miR_Cptac_vst <- read.csv(file=paste0(projDir,"/Data/TCGA-miR_CPTAC_vst.csv"),
+# write.csv(miR_Cptac_vst,
+#           paste0(projDir,"/Data/TCGA-miR_CPTACrpm_vst.csv"))
+miR_Cptac_vst <- read.csv(file=paste0(projDir,"/Data/TCGA-miR_CPTACrpm_vst.csv"),
                             row.names = 1)
 
 

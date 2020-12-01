@@ -161,16 +161,20 @@ plot(clusDendro)
 control <- trainControl(method="cv", number=10)
 metric <- "Accuracy"
 # SVM
-fit.svm <- train(CMS~., data=rc_vst[,-c(highlyCorDescr,493)], method="svmRadial", 
+fit.svm <- train(CMS~., data=rc_vst_BR[,-grep("Sample.ID", colnames(rc_vst_BR))],
+                 method="svmLinear", 
                  metric="Kappa", trControl=control)
 # SVM
-fit.svm.acc <- train(CMS~., data=rc_vst[,-c(highlyCorDescr,493)], method="svmRadial", 
+fit.svm.acc <- train(CMS~., data=rc_vst_BR[,-grep("Sample.ID", colnames(rc_vst_BR))],
+                     method="svmLinear", 
                  metric="Accuracy", trControl=control)
 # Random Forest
-fit.rf <- train(CMS~., data=rc_vst[,-c(highlyCorDescr,493)], method="rf", 
+fit.rf <- train(CMS~., data=rc_vst_BR[,-grep("Sample.ID", colnames(rc_vst_BR))], 
+                method="ranger", 
                 metric="Kappa", trControl=control)
 # Random Forest
-fit.rf.acc <- train(CMS~., data=rc_vst[,-c(highlyCorDescr,493)], method="rf", 
+fit.rf.acc <- train(CMS~., data=rc_vst_BR[,-grep("Sample.ID", colnames(rc_vst_BR))],
+                    method="ranger", 
                 metric="Accuracy", trControl=control)
 # compare accuracy of models
 results <- resamples(list(svm.kappa=fit.svm, svm.acc=fit.svm.acc, 
