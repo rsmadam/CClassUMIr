@@ -34,7 +34,10 @@ head(N_imp_RF_df, 6)
 for(i in c("hsa.mir.625", "hsa.mir.592", "hsa.mir.552", 
            "hsa.mir.218", "hsa.mir.31", "hsa.mir.375", "hsa.mir.143",
            "hsa.mir.615", "hsa.mir.335", 
-           "hsa.mir.146b")){
+           "hsa.mir.146b",
+           "hsa.mir.99a","hsa.mir.92b","hsa.mir.141",
+           "hsa.mir.942","hsa.mir.3170","hsa.mir.30a",
+           "hsa.mir.362","hsa.mir.582","hsa.mir.155","hsa.mir.92a")){
 ggplot( rc_vst_BR, aes_string( x=i) ) + 
   geom_density( aes( group=CMS, colour=CMS, fill=CMS ), alpha=0.3 ) +
   scale_fill_manual( values = paletteCMSn ) +

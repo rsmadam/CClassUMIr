@@ -394,16 +394,20 @@ VU_rc_vst <- as.data.frame( t( varianceStabilizingTransformation( as.matrix(
   round( VU_rc_vst, 0 ) ) ) ) ) #in right direction for RF
 
 ###get clinical data
-clinVU <- read.csv2("/Users/ronjaadam/projects/miRNA_mCRC/Main_merged_rounded_okt_2014 lokatie van biopt en tumor percentage.csv",
-                        strip.white = T, sep=";", blank.lines.skip = T, nrows = 220)[,1:3]
-#all patients for miR-data
-colnames(clinVU) <- c("sampleID", "locSample","Tu%")
-clinVU <- clinVU[match(rownames(VU_rc_vst), clinVU$sampleID), ] #sort like miR-data
-
 clinVU.Surv <- read.csv2("/Users/ronjaadam/projects/miRNA_mCRC/clinDataVU_manuallyCombined.csv",
                     sep="\t") #extensive clin data
 clinVU.MSS <- read.csv2("/Users/ronjaadam/projects/miRNA_mCRC/Identifier-OSknown_DPTB.csv",
                         sep="\t")
+clinVU.age1 <- read.csv2("/Users/ronjaadam/projects/miRNA_mCRC/Identifier-OSknown age and gender.csv",
+                         sep="\t")
+clinVU.age2 <- read.csv2("/Users/ronjaadam/projects/miRNA_mCRC/Identifier-OSunknown age and gender.csv",
+                         sep="\t")
+clinVU <- read.csv2("/Users/ronjaadam/projects/miRNA_mCRC/Main_merged_rounded_okt_2014 lokatie van biopt en tumor percentage.csv",
+                    strip.white = T, sep=";", blank.lines.skip = T, nrows = 220)[,1:3]
+#all patients for miR-data
+colnames(clinVU) <- c("sampleID", "locSample","Tu%")
+clinVU <- clinVU[match(rownames(VU_rc_vst), clinVU$sampleID), ] #sort like miR-data
+
 
 #match sample names to patient ID in extended clin info table
 clinVU.Surv$sampleID <- rownames(VU_rc_vst)[
@@ -411,6 +415,11 @@ clinVU.Surv$sampleID <- rownames(VU_rc_vst)[
         sub("\\..*","",rownames(VU_rc_vst)) )]
 clinVU <- left_join(clinVU, clinVU.Surv, by=c("sampleID"))
 clinVU <- left_join(clinVU, clinVU.MSS, by=c("sampleID"))
+clinVU <- left_join(clinVU, clinVU.age1, by=c("sampleID"= "SampleID"))
+clinVU[match(clinVU.age2$sampleID, clinVU$sampleID),
+       c("Gender", "Age", "MSI.MSS", "Stage")] <- clinVU.age2[,c("Gender", "Age", "MSI.MSS", "Stage")]
+
+
 clinVU$Date <- gsub("/",".", clinVU$Date.x)
 # clinVU$DateYY <- sub(".{6}","", clinVU$Date)
 # clinVU$DateMM <- sub("\\..*","", sub(".{3}","", clinVU$Date))
@@ -440,6 +449,7 @@ clinVU$sampleType <- factor(clinVU$sampleType, levels=c("primary_CRC","recur_CRC
                                                        "normal_colon" , "normal_liver",   
                                                         "normal_lung","normal_ovary"),
                             ordered = T)
+clinVU$SampleOrigin <- NULL #is most incomplete
 
 ##extract patient of sample for samples with paired samples
 clinVU$patient <- sub("_.*","", sub("\\..*","", sub("^[P,M]", "", clinVU$sampleID)))
@@ -485,21 +495,18 @@ summary(clinVU$sampleType)
 ### what is the origin 
 
 ##exploratory PCA
-VU_trans <- preProcess(VU_rc_vst[grep("prim", clinVU$sampleType),1:1714],#[which(sourceS=="P"),], 
+VU_trans <- preProcess(VU_rc_vst[grep("prim", clinVU$sampleType),
+                                 which(apply(VU_rc_vst[,1:1437], 2, var) != 0 )],#[which(sourceS=="P"),], 
   method=c(#"BoxCox",
     "center","scale", 
     "pca"),
   thresh = list(thresh = 0.60))
-VU_PC <- predict(VU_trans, VU_rc_vst[,1:1714])
+VU_PC <- predict(VU_trans, VU_rc_vst[,1:1437])
 
 #### plot kmeans class labels on PCA #####
-VU_kM <- kmeans(VU_rc_vst[grep("prim", clinVU$sampleType),1:1714], 4, nstart = 20)
+VU_kM <- kmeans(VU_rc_vst[grep("prim", clinVU$sampleType),1:1437], 4, nstart = 20)
 VU_kM$cluster <- as.factor(VU_kM$cluster)
 summary(VU_kM$cluster)
-
-## to check for batch effects
-colorBy <- clinVU$Date[match(rownames(VU_rc_vst[grep("prim", clinVU$sampleType),]), 
-                             clinVU$sampleID)]
 
 pdf("/Users/ronjaadam/projects/miRNA_mCRC/miRNA classifier/analyses/plots/VUdata_vst_prim_kM_PCA.pdf",
     onefile = T)
@@ -512,21 +519,26 @@ ggplot(VU_PC,aes(x=PC1,y=PC2,
   scale_color_npg()#lancet() #jco # npg # aaas
 dev.off()
 
+## to check for batch effects
+colorBy <- clinVU$Date[match(rownames(VU_rc_vst[grep("prim", clinVU$sampleType),]), 
+                             clinVU$sampleID)]
+
 ##exploratory tSNE
-set.seed(9)  
 library(Rtsne)
+set.seed(9)  
 tsne_model_VU <- Rtsne( as.matrix( VU_rc_vst[grep("prim", 
-                                                  clinVU$sampleType),1:1714] ), 
+                                                  clinVU$sampleType),1:1437] ), 
                       check_duplicates=FALSE, 
                       pca=TRUE, perplexity=30, theta=0.5, dims=2)
 d_tsne_VU <- as.data.frame(tsne_model_VU$Y) 
-ggplot(d_tsne_VU, aes(x=V1, y=V2, colour=colorBy))+
+ggplot(d_tsne_VU, aes(x=V1, y=V2, colour=pred_VU_RF$CMS_20[grep("prim", 
+                                                             clinVU$sampleType)]))+
   geom_point() +
   xlab("") + ylab("") +
   theme(axis.text.x=element_blank(),
         axis.text.y=element_blank()) +
   theme_minimal()+
-  #scale_color_npg()
+  scale_color_manual(values = pal_npg("nrc")(5)[c(1,3,4,5)])
   scale_color_manual(values = c(wes_palette("Darjeeling1", 24, 
                                                     type = c( "continuous")) ))
 scale_colour_manual(values = paletteCMS)
@@ -675,25 +687,31 @@ miR_READ_vst_BR <- read.csv(file=paste0(projDir,"/Data/TCGA-miR_READ_vst_BR_CMS-
 
 
 ##check batch effects
-tsne_model_READ <- Rtsne( as.matrix( miR_READ_vst_BR[,]), 
+set.seed(5678)
+tsne_model_READ <- Rtsne( as.matrix( miR_READ_vst_BR[,1:156]), 
                         check_duplicates=FALSE, 
                         pca=TRUE, perplexity=20, theta=0.5, dims=2)
 colREAD <- sub("-.*","",sub("TCGA-","",
                             clinical.read$submitter_id[match(rownames(miR_READ_vst), 
                                  clinical.read$submitter_id)]))
 ggplot(as.data.frame(tsne_model_READ$Y), 
-       aes(x=V1, y=V2, color =batchInfo$batch))+
+       aes(x=V1, y=V2, color = miR_READ_vst_BR$CMS.lv))+
   geom_point() +
   xlab("") + ylab("") +
-  theme(axis.text.x=element_blank(),
-        axis.text.y=element_blank()) +
   theme_minimal()+
+  # scale_colour_manual(values = paletteCMS, name = "CMS")
+  # 
   scale_color_manual(values = c(wes_palette("Darjeeling1", 24, 
                                             type = c( "continuous")) ))
-ggsave(paste0(plotDir,"/READ-miR_vst_tSNE_TSS_after-BR.pdf" ))
+ggsave(paste0(plotDir,"/READ-tSNE_miR_vst_BR_CMS.lv.pdf" ))
 ##-> removed the AG difference while retaining mRNA-based predicted CMS differences
 
 
+batchInfo <- data.frame("sample"=rownames(miR_READ_vst_BR),
+                        "batch"=factor(sub("-.*","",
+                                           sub("TCGA-","",
+                                               rownames(miR_READ_vst_BR)))))#[
+                                                 #grep("CMS", miR_READ_vst$CMS.cl.rf),]
 
 
 ################################################################

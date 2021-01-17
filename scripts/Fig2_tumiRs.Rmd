@@ -58,14 +58,14 @@ miR_READ_vst_BR <- read.csv(file= paste0(projDir,
 selREAD <- 1:length(miR_READ_vst_BR$CMS.cl.rf)#which(  
   #grepl("CMS", miR_READ_vst_BR$CMS.lv ) &
     #miR_READ_vst_BR$CMS.lv == miR_READ_vst_BR$CMS.cl.rf)
-pred_read_RF <- predict(model_RF_best_all,
+pred_read_RF <- predict(model_RF_best_50_TumiRs,
                         newdata = miR_READ_vst_BR[selREAD,],
                                                   #which(miR_READ_vst_BR$CMS.lv == miR_READ_vst_BR$CMS.cl.rf)]),],
                         type = "prob")
 summary(pred_read_RF)
 
 #### ROC curve for test data, each CMS vs other #####
-pdf("Fig2_READ_RF-20-all_ROC-curves.pdf", onefile = T)
+#pdf("Fig2_READ_RF-20-all_ROC-curves.pdf", onefile = T)
 for (cms in 1:4){
 refLabel <- factor(ifelse(miR_READ_vst_BR$CMS.lv==paste0("CMS", cms), 
                           paste0("CMS", cms), 
@@ -81,7 +81,7 @@ result.coords <- coords(result.roc, "best", transpose = TRUE,
                         ret=c("threshold", "accuracy"))
 print(result.coords)#to get threshold and accuracy
 }
-dev.off()
+#dev.off()
 
 ###better method to censor by post prob
 diffSecond <- function(x, output) {
@@ -104,7 +104,7 @@ pred_read_RF_20 <- predict(model_RF_20_best_all, #get distances also for RF_20
 pred_read_RF$d2ndProb_20 <- apply(pred_read_RF_20, 1, diffSecond)
 pred_read_RF$d2ndClass_20 <- apply(pred_read_RF_20, 1, theSecond)
 
-pred_read_RF$CMS <- predict(model_RF_best_all, 
+pred_read_RF$CMS_tumiR50 <- predict(model_RF_best_50_TumiRs, 
                                newdata = miR_READ_vst_BR[selREAD
                                                          ,grep("hsa", colnames(miR_READ_vst_BR))],
                                type = "raw")
@@ -115,11 +115,13 @@ pred_read_RF$CMS_20 <- predict(model_RF_20_best_all,
 rownames(pred_read_RF) <- rownames(miR_READ_vst_BR[selREAD,])
 pred_read_RF$Sample.ID <-row.names(pred_read_RF)
 summary(pred_read_RF$CMS_20)
+summary(pred_read_RF$CMS_tumiR50)
+
 #write.csv2(pred_read_RF, paste0(projDir, "analyses/tables/READ_predicted_RF-all_RF-20.csv"))
 pred_read_RF <- read.csv2(paste0(projDir, "analyses/tables/READ_predicted_RF-all_RF-20.csv"),
                           row.names = 1)
 
-confusionMatrix(pred_read_RF$CMS, factor(miR_READ_vst_BR$CMS.lv[selREAD]))
+confusionMatrix(pred_read_RF$CMS_tumiR100, factor(miR_READ_vst_BR$CMS.lv[selREAD]))
 confusionMatrix(pred_read_RF$CMS_20, factor(miR_READ_vst_BR$CMS.lv[selREAD]))
 confusionM.READ <- confusionMatrix(pred_read_RF$CMS, 
                                    factor(miR_READ_vst_BR$CMS.lv[selREAD]))[["table"]]
@@ -139,13 +141,13 @@ selREAD <- grepl("CMS", miR_READ_vst_BR$CMS.lv )
 
 #### overlap READ samples mRNA vs mirNA
 concREAD <- data.frame("CMS"=factor(c(miR_READ_vst_BR[selREAD , "CMS.lv"],
-                       as.character(pred_read_RF$CMS[selREAD]), 
+                       as.character(pred_read_RF$CMS_tumiR50[selREAD]), 
                        as.character(pred_read_RF$CMS_20[selREAD]))),
            "pat"=c(rownames(miR_READ_vst_BR[selREAD,]),
            rownames(miR_READ_vst_BR[selREAD,]),
            rownames(miR_READ_vst_BR[selREAD,])),
            "type"= factor(c(rep("mRNA", length(miR_READ_vst_BR[selREAD,1])),
-                     rep("miR", length(miR_READ_vst_BR[selREAD,1])),
+                     rep("tumiR50", length(miR_READ_vst_BR[selREAD,1])),
                          rep("miR_RF_20", length(miR_READ_vst_BR[selREAD,1])))))
 concREAD$CMS <- as.numeric(sub("CMS", "", concREAD$CMS))
 concREAD$CMS <- factor(paste0("CMS", concREAD$CMS))
@@ -156,31 +158,25 @@ wideREAD <- reshape(concREAD, direction="wide",
 #### alluvial plot #####
 library("ggalluvial")
 ggplot(as.data.frame(wideREAD),
-       aes(axis1 = CMS.mRNA, axis2 = CMS.miR)) +
-  geom_alluvium(aes(fill = CMS.miR), width = 1/12) +
+       aes(axis1 = CMS.mRNA, axis2 = CMS.tumiR50)) +
+  geom_alluvium(aes(fill = CMS.tumiR50), width = 1/12) +
   geom_stratum(width = 1/12, fill = rev(c(paletteCMS, paletteCMS)), color = "grey") +
-  scale_x_discrete(limits = c("mRNA","miR"), expand = c(.05, .05)) +
+  scale_x_discrete(limits = c("mRNA","tumiR50"), expand = c(.05, .05)) +
   scale_fill_manual(values = paletteCMSn) +
   theme_minimal() + 
-  ggtitle("READ mRNA vs. miR CMS")
-ggsave(paste0(plotDir, "Fig2d_READ_alluvial_mRNA_vs_RF-all_noNA.pdf"))
+  ggtitle("READ mRNA vs. tumiR-RF50 CMS")
+ggsave(paste0(plotDir, "READ_alluvial_mRNA_vs_best-50-RF-tumiRs_noNA.pdf"))
 
 
 
 #### confidence boxplots ####
-wideREAD$d2ndProb <- pred_read_RF$d2ndProb
-wideREAD$d2ndProb_20 <- pred_read_RF$d2ndProb_20
-ggplot(wideREAD, aes(CMS.miR, d2ndProb) ) + 
-  geom_boxplot(aes(group = CMS.miR, fill=factor(CMS.miR))) +
+wideREAD$d2ndProb <- pred_read_RF$d2ndProb[selREAD]
+wideREAD$d2ndProb_20 <- pred_read_RF$d2ndProb_20[selREAD]
+ggplot(wideREAD, aes(CMS.tumiR100, d2ndProb) ) + 
+  geom_boxplot(aes(group = CMS.tumiR100, fill=factor(CMS.tumiR100))) +
   scale_fill_manual(values=paletteCMS, name="CMS") +
   theme_minimal()
-ggsave(paste0(plotDir, "Fig2d_READ_best-RF-all_confidence_d2ndProb_boxplot.pdf"),
-       useDingbats=FALSE)
-ggplot(wideREAD, aes(CMS.miR_RF_20, d2ndProb_20) ) + 
-  geom_boxplot(aes(group = CMS.miR_RF_20, fill=factor(CMS.miR_RF_20))) +
-  scale_fill_manual(values=paletteCMS, name="CMS") +
-  theme_minimal()
-ggsave(paste0(plotDir, "Fig2d_READ_best-RF-20-all_confidence_d2ndProb_boxplot.pdf"),
+ggsave(paste0(plotDir, "READ_best-100-RF-tumiRs_confidence_d2ndProb_boxplot.pdf"),
        useDingbats=FALSE)
 
 
@@ -201,7 +197,7 @@ ggplot(wideREAD, aes(purity, d2ndProb) ) +
                   fill=factor(wideREAD$CMS.miR)), 
               method = "lm", show.legend = F) +
   stat_cor()
-ggsave(paste0(plotDir, "FigS2_READ_best-RF-all_Purity-vs-d2ndProb_correlation.pdf"),
+ggsave(paste0(plotDir, "READ_best-50-RF-tumiRs_Purity-vs-d2ndProb_correlation.pdf"),
        width=6, height=6, useDingbats=FALSE)
 
 ```
@@ -211,8 +207,8 @@ ggsave(paste0(plotDir, "FigS2_READ_best-RF-all_Purity-vs-d2ndProb_correlation.pd
 ##### VU data #####
 library(RColorBrewer)
 VU_rc_vst$Sample.ID <- row.names(VU_rc_vst)
-VU_valid <- VU_rc_vst[grep("primary",clinVU$sampleType),]
-pred_VU_RF <- predict(model_RF_best_all, newdata = VU_valid, type = "prob")
+VU_valid <- VU_rc_vst#[grep("primary",clinVU$sampleType),]
+pred_VU_RF <- predict(model_RF_best_50_TumiRs, newdata = VU_valid, type = "raw")
 pred_VU_RF_20 <- predict(model_RF_20_best_all, newdata = VU_valid, type = "prob")
 pred_VU_RF$d2ndProb <- apply(pred_VU_RF, 1, diffSecond)
 pred_VU_RF$d2ndClass <- apply(pred_VU_RF[,1:4], 1, theSecond)
@@ -221,23 +217,24 @@ pred_VU_RF_20 <- predict(model_RF_20_best_all, #get distances also for RF_20
                         type = "prob")
 pred_VU_RF$d2ndProb_20 <- apply(pred_VU_RF_20, 1, diffSecond)
 pred_VU_RF$d2ndClass_20 <- apply(pred_VU_RF_20, 1, theSecond)
-pred_VU_RF$CMS <- predict(model_RF_best_all, 
+pred_VU_RF$CMS_tumiR100 <- predict(model_RF_best_100_TumiRs, 
                                     newdata = VU_valid, type = "raw")
 pred_VU_RF$CMS_20 <- predict(model_RF_20_best_all, 
                                  newdata = VU_valid, type = "raw")
 summary(pred_VU_RF$CMS_20)
-summary(pred_VU_RF$CMS)
-pred_VU_RF$SampleID <- VU_rc_vst$Sample.ID 
+summary(pred_VU_RF$CMS_tumiR100)
+pred_VU_RF$SampleID <- VU_rc_vst$Sample.ID[grep("primary",clinVU$sampleType)]
 
 #potentially subset
-pred_VU_RF <- pred_VU_RF[grep("primary",clinVU$sampleType),]
+#pred_VU_RF <- pred_VU_RF[grep("primary",clinVU$sampleType),]
 #write.csv2(pred_VU_RF, paste0(projDir, "analyses/tables/VU_predicted_RF-all_RF-20.csv"))
 
 
 #### overlap VU samples mRNA vs mirNA ####
-concVU <- data.frame("CMS"=factor(c(as.character(pred_VU_RF$CMS), as.character(pred_VU_RF$CMS_20))),
+concVU <- data.frame("CMS"=factor(c(as.character(pred_VU_RF$CMS_tumiR100), 
+                                    as.character(pred_VU_RF$CMS_20))),
            "pat"=c(rownames(VU_valid),rownames(VU_valid)),
-           "type"= factor(c(rep("miR", length(VU_valid[,1])),
+           "type"= factor(c(rep("miR_tumiR100", length(VU_valid[,1])),
                          rep("miR_RF_20", length(VU_valid[,1])))))
 concVU$CMS <- as.numeric(sub("CMS", "", concVU$CMS))
 concVU$CMS <- factor(paste0("CMS", concVU$CMS))
@@ -253,25 +250,25 @@ paletteCMSn=c("CMS1" ="#E79E1B",
 
 #### alluvial plot #####
 ggplot(as.data.frame(wideVU),
-       aes(axis1 = CMS.miR, axis2 = CMS.miR_RF_20)) +
-  geom_alluvium(aes(fill = CMS.miR), width = 1/12) +
+       aes(axis1 = CMS.miR_tumiR100, axis2 = CMS.miR_RF_20)) +
+  geom_alluvium(aes(fill = CMS.miR_tumiR100), width = 1/12) +
   geom_stratum(width = 1/12, fill = rev(c(paletteCMS, paletteCMS)), color = "grey") +
-  scale_x_discrete(limits = c("mRNA", "miR_RF20", "miR"), expand = c(.05, .05)) +
+  scale_x_discrete(limits = c("miR_tumiR100","miR_RF20" ), expand = c(.05, .05)) +
   scale_fill_manual(values = paletteCMSn) +
   theme_minimal() + 
-  ggtitle("READ miR vs. miR_RF20 CMS")
-ggsave(paste0(plotDir, "FigS2_VU-primary_alluvial_miR_RFallvsRF20.pdf"))
+  ggtitle("VU miR_tumiR100 vs. miR_RF20 CMS")
+ggsave(paste0(plotDir, "VU-primary_alluvial_miR_best-100-RF-tumiRs_vs_RF20.pdf"))
 
 
 wideVU$d2ndProb <- pred_VU_RF$d2ndProb
 wideVU$d2ndProb_20 <- pred_VU_RF$d2ndProb_20
 
 #### confidence boxplots ####
-ggplot(wideVU, aes(CMS.miR, d2ndProb) ) + 
-  geom_boxplot(aes(group = CMS.miR, fill=factor(CMS.miR))) +
+ggplot(wideVU, aes(CMS.miR_tumiR100, d2ndProb) ) + 
+  geom_boxplot(aes(group = CMS.miR_tumiR100, fill=factor(CMS.miR_tumiR100))) +
   scale_fill_manual(values=paletteCMS, name="CMS") +
   theme_minimal()
-ggsave(paste0(plotDir, "Fig2d_VU-primary_best-RF-all_confidence_d2ndProb_boxplot.pdf")
+ggsave(paste0(plotDir, "VU-primary_best-RF-all_confidence_d2ndProb_boxplot.pdf")
        , useDingbats=FALSE)
 
 wideVU$perc <- clinVU[match(wideVU$pat, clinVU$sampleID), "perc"]
@@ -280,17 +277,17 @@ wideVU$purity[grep(">", wideVU$perc )] <- 80
 wideVU$purity[grep("<", wideVU$perc )] <- NA
 
 ### correlate confidence to purity ###
-ggplot(wideVU, aes(purity, d2ndProb_20) ) + 
-  geom_jitter(aes(col=factor(wideVU$CMS.miR_RF_20)), width = 1.2)+
-  facet_grid(wideVU$CMS.miR_RF_20) +
+ggplot(wideVU, aes(purity, d2ndProb) ) + 
+  geom_jitter(aes(col=factor(wideVU$CMS.miR_tumiR100)), width = 1.2)+
+  facet_grid(wideVU$CMS.miR_tumiR100) +
   scale_colour_manual(values=paletteCMS, name="CMS") +
   scale_fill_manual(values=paletteCMS[c(1,2,4)], name="CMS") +
   theme_minimal() +
-  geom_smooth(aes(color=factor(wideVU$CMS.miR_RF_20), 
-                  fill=factor(wideVU$CMS.miR_RF_20)), 
+  geom_smooth(aes(color=factor(wideVU$CMS.miR_tumiR100), 
+                  fill=factor(wideVU$CMS.miR_tumiR100)), 
               method = "lm", show.legend = F) +
   stat_cor()
-ggsave(paste0(plotDir, "FigS2_VU-primary_best-RF-20-all_Purity-vs-d2ndProb_correlation.pdf"),
+ggsave(paste0(plotDir, "VU-primary_miR_best-100-RF-tumiRs_Purity-vs-d2ndProb_correlation.pdf"),
        width=6, height=6, useDingbats=FALSE)
 
 ```

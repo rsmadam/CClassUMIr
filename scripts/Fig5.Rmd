@@ -1,0 +1,390 @@
+---
+title: "CMS-miRaCl_Fig5"
+output: html_document
+---
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+```{r}
+#### for COAD ####
+
+library(survival)
+library(survminer)
+library(RTCGA.clinical)
+paletteCMS=c( "#E79E1B", 
+              "#0071B1", 
+             "#C45597",#Guinney:"#C977A4", 
+              "#009C74")
+paletteCMSn=c("CMS1" ="#E79E1B", 
+              "CMS2"= "#0071B1", 
+              "CMS3"= "#C45597",#Guinney:"#C977A4", 
+              "CMS4"="#009C74",
+              "NOLBL"="#d3d3d3")
+
+# ### analyse TCGA survival colon dataset
+# ##skip because TCGA survival data not reliable
+# rc_vst_surv <- cbind(clinical.coad[ match(rownames(rc_vst_BR), clinical.coad$submitter_id), ], 
+#                      "CMS"=factor(rc_vst_BR$CMS, ordered=T))
+# rc_vst_surv <- cbind(clinical.coad[ match(rownames(miR_COAD_vst), clinical.coad$submitter_id), ], 
+#                       "CMS"=factor(miR_COAD_vst$CMS.lv, ordered=T))
+# 
+# # create vector time to death containing values to censor for death
+# rc_vst_surv$OS <- as.numeric( apply(rc_vst_surv, 1, function(x) { ifelse( is.na( x["days_to_death"] ),
+#                                  x["days_to_last_follow_up"],
+#                                  x["days_to_death"] )}) )
+# 
+# # create death censoring
+# rc_vst_surv$Event_OS <- ifelse(rc_vst_surv$vital_status == 'Alive', 0, 1)
+# 
+# fit <- survfit(Surv(OS, Event_OS) ~ CMS,
+#                data = rc_vst_surv[])
+# 
+# # visualize with survminer
+# pdf(paste0(plotDir,
+#            "Fig5_SURV_COAD-rc-vst-445-cms-lv.pdf"),
+#     width=6, height=7, onefile = F)
+# print( ggsurvplot(fit, data = rc_vst_surv, risk.table = TRUE, pval = T,
+#            palette =  paletteCMS, surv.median.line = "hv", pval.method = T,
+#            xlim= c(0,2500)) )
+# dev.off()
+# 
+# rc_vst_surv_st23 <- rc_vst_surv[grep(" iv[a-c]?$",rc_vst_surv$tumor_stage, perl = T),]
+# summary(factor(rc_vst_surv_st23$tumor_stage))
+# #reduce to stage ii/iii
+# fit <- survfit(Surv(OS, Event_OS) ~ CMS,
+#                data = rc_vst_surv_st23)
+# 
+# # visualize with survminer
+# pdf(paste0(plotDir,
+#            "Fig4a_SURV_COAD-rc-vst-445-cms-lv_stage4.pdf"),
+#     width=6, height=7, onefile = F)
+# ggsurvplot(fit, data = rc_vst_surv_st23,
+#            risk.table = TRUE, pval = T,
+#            palette =  paletteCMS, surv.median.line = "hv",
+#            xlim= c(0,2500)) 
+# dev.off()
+
+```
+
+
+
+```{r}
+#### for READ ####
+# ##skip because TCGA survival data not reliable
+# ### get TCGA survival rectal dataset
+# pred_read_RF <- read.csv2(paste0(projDir, "analyses/tables/READ_predicted_RF-all_RF-20.csv"),
+#                           row.names = 1)
+# 
+# read_rc_vst_surv <- cbind(clinical.read[ match(rownames(miR_READ_vst_BR), 
+#                                                clinical.read$submitter_id), ], 
+#                           "CMS"=factor(miR_READ_vst_BR$CMS, ordered=T))
+# 
+# read_rc_vst_surv$OS <- clinical.read$days_to_last_follow_up[ match(rownames(miR_READ_vst_BR), 
+#                                                                    clinical.read$submitter_id) ]
+# read_rc_vst_surv$Event_OS <- ifelse(read_rc_vst_surv$vital_status=="Alive", 0, 1) #Surv takes 0 as alive and 1 as dead
+# read_rc_vst_surv$OS[which(read_rc_vst_surv$Event_OS == 1 )] <- read_rc_vst_surv$days_to_death[which(read_rc_vst_surv$Event_OS == 1 )]
+# 
+# fit <- survfit(Surv(OS, Event_OS) ~ CMS,
+#                data = read_rc_vst_surv)
+# 
+# # visualize with survminer
+# pdf(paste0(plotDir,
+#            "Fig4_SURV_READ-cms.pdf"),
+#     width=6, height=7)
+# print( ggsurvplot(fit, data = read_rc_vst_surv, risk.table = TRUE, pval = T,
+#            palette =  paletteCMS, surv.median.line = "hv", pval.method = T,
+#            xlim= c(0,2500)) )
+# dev.off()
+
+
+```
+
+
+```{r}
+
+#### with VU data (looks different because of the high amount of stage IV) ####
+# pred_VU_RF <- read.csv2(paste0(projDir, "analyses/tables/VU_predicted_RF-all_RF-20.csv"), row.names = 1) #from all VUsamples
+#clinVU$CMS <- pred_VU_RF$CMS[match(clinVU$sampleID, pred_VU_RF$SampleID)]
+#clinVU$CMS_20 <- pred_VU_RF$CMS_20[match(clinVU$sampleID, pred_VU_RF$SampleID)]
+#write.csv2(clinVU, paste0(projDir, "analyses/tables/VUclin-predictedCMS_RF-all_RF-20.csv"))
+clinVU.CMS <- read.csv2(paste0(projDir, "analyses/tables/VUclin-predictedCMS_RF-all_RF-20.csv")) 
+
+#event: in OS analyisi 0=alive, 1=dead, people with 0, meaning without Death/event will be censored 
+clinVU$Event_PFS <- ifelse(clinVU$PFS_1==clinVU$OS & clinVU$Event_OS==0, 0, 1) 
+#if OS=PFS patient alive at end of study or dropped out from any cause -> censor that 3 patients
+clinVU$Event_PFS[is.na(clinVU$PFS_1)] <- NA
+
+## OS VU RF-all
+fit_VU <- survfit(Surv(OS, Event_OS) ~ CMS,
+               data = clinVU[
+                 which(grepl("primair CRC", clinVU$locSample)),]) 
+# visualize with survminer
+pdf(paste0(plotDir,
+           "Fig4_VU_vst_primary_RF-all_survOS.pdf"),
+    width=6, height=7, onefile = F)
+print( ggsurvplot(fit_VU, data = clinVU[
+  which(grepl("primair CRC", clinVU$locSample)),
+                              c( "OS", "Event_OS", "CMS")], 
+           risk.table = TRUE, pval = T,  xlim=c(0,2000),
+           palette = paletteCMS[] ))
+dev.off()
+
+##a coxph outputs the individual p-values per class but it needs dummy variables
+# Fit a Cox proportional hazards model
+clinVU$CMS1 <- factor(ifelse(clinVU$CMS=="CMS1", "CMS1", "other"))
+clinVU$CMS2 <- factor(ifelse(clinVU$CMS=="CMS2", "CMS2", "other"))
+clinVU$CMS3 <- factor(ifelse(clinVU$CMS=="CMS3", "CMS3", "other"))
+clinVU$CMS4 <- factor(ifelse(clinVU$CMS=="CMS4", "CMS4", "other"))
+clinVU$CMS.relevel <- relevel(clinVU$CMS, "CMS2")
+
+
+fit.coxph <- coxph(Surv(OS, Event_OS) ~ CMS.relevel,
+               data = clinVU[
+                 which(grepl("primair CRC", clinVU$locSample) 
+                       & !is.na(clinVU$OS)),], )
+ggforest(fit.coxph, data = clinVU[
+                 which(grepl("primair CRC", clinVU$locSample) 
+                       & !is.na(clinVU$OS)),])
+ggsave(paste0(plotDir,"VU_OS-Surv-forest_CMS2vsothers.pdf"), 
+       height = 6, width=5)
+
+## PFS VU RF-all
+fit_VU <- survfit(Surv(PFS_1, Event_PFS) ~ CMS, #OS, Event_OS
+               data = clinVU[#grepl("Oxaliplatin", clinVU$Scheme_for_analysis),])#
+                 which(#clinVU$CMS_20 %in% c("CMS2", "CMS4")
+                 #grepl("tachroon", clinVU$Syn_metachroom)
+                # &
+               grepl("primair CRC", clinVU$locSample)),]) #[grep("P[0-9]", t_VU_rc_vst_surv$Sample.ID),]
+# visualize with survminer
+pdf(paste0(plotDir,
+           "Fig4_VU_vst_primary_RF-all_survPFS.pdf"),
+    width=6, height=7, onefile = F)
+print( ggsurvplot(fit_VU, data = clinVU[
+  which(grepl("primair CRC", clinVU$locSample)), #
+                              c( "PFS_1", "Event_PFS", "CMS")],
+           risk.table = TRUE, pval = T, xlim=c(0,1500),
+           palette = paletteCMS[] ))#"#4F2776" #c("#2a7886","#79bac1" ))# 
+dev.off()
+
+
+VU_vst_surv <- cbind(clinVU, VU_rc_vst)#[,c("hsa.mir.625", "hsa.mir.592", "hsa.mir.552", 
+           #"hsa.mir.218", "hsa.mir.31", "hsa.mir.375", "hsa.mir.143")])
+##keep only primary with survival data
+VU_vst_surv <- VU_vst_surv[which(grepl("prim",#allMet
+                       VU_vst_surv$sampleType) & !is.na(VU_vst_surv$OS)),]
+surv_object <- Surv(time = VU_vst_surv$OS, 
+                    event = VU_vst_surv$Event_OS)
+fit.coxph <- coxph(surv_object ~
+                  hsa.mir.625 + hsa.mir.592 + hsa.mir.552 +
+                    hsa.mir.218 + hsa.mir.31 + hsa.mir.375 +
+                    hsa.mir.143 +hsa.mir.615 + hsa.mir.335 +
+                    hsa.mir.146b,
+                   data = VU_vst_surv)
+ggforest(fit.coxph, data = VU_vst_surv)
+ggsave(paste0(plotDir,"VU_Surv-forest_top10.pdf"), 
+       height = 9, width=5)
+
+
+
+#making formulas
+univ_formulas <- sapply(c("hsa.mir.625", "hsa.mir.592", "hsa.mir.552", 
+           "hsa.mir.218", "hsa.mir.31", "hsa.mir.375", "hsa.mir.143", 
+           "hsa.mir.615", "hsa.mir.335", "hsa.mir.146b"),
+           function(x)as.formula(paste('Surv(VU_vst_surv$OS,VU_vst_surv$Event_OS)~',x))
+)
+#making a list of models
+univ_models <- lapply(univ_formulas, function(x){coxph(x,data=VU_vst_surv)})
+
+#extract data (here I've gone for HR and confint)
+univ_results <- lapply(univ_models,function(x){return(exp(cbind(coef(x),confint(x),x$p)))})
+
+```
+
+
+
+```{r}
+## overlap paired samples P&M
+library(ComplexHeatmap)
+concordPM <- clinVU[grep("^[P,M][0-9]", clinVU$sampleID), 
+                     c("CMS", "sampleID", "sampleType", 
+                       "patient", "perc")]
+which(duplicated(clinVU$patient) & grepl("^S",clinVU$sampleID)) # no pairs identifiable in OS sample set 
+#### adapt info format t onumeric or factor ####
+concordPM$purity <- as.integer(sub("<","",sub(">","", concordPM$perc)))/100
+concordPM$purity[grep(">", concordPM$perc )] <- 0.75 
+concordPM$purity[grep("<", concordPM$perc )] <- NA
+concordPM$PM <- factor(sub("[0-9].*", "",concordPM$sampleID), 
+                          levels=c("P", "M"), ordered=T)
+concordPM$nCMS <- as.numeric(sub("CMS","", concordPM$CMS))
+wsConcPM <- merge(concordPM[grep("P", concordPM$sampleID),], 
+                          concordPM[grep("M", concordPM$sampleID),],
+                  by="patient", suffixes = c("_P", "_M"))
+wsConcPM$patient <- as.numeric(wsConcPM$patient)
+rownames(wsConcPM) <- make.names(wsConcPM$patient, unique=T)
+wsConcPM <- wsConcPM[-grep("_2", wsConcPM$sampleID_P),] #drop one patient with duplicate primary
+wsConcPM <- wsConcPM[order(wsConcPM$sampleID_M),] #drop one patient with duplicate primary
+rownames(wsConcPM) <- sub("\\..*","",sub("M","", wsConcPM$sampleID_M))
+wsConcPM$stage <- clinVU$Stage[match(wsConcPM$sampleID_P, clinVU$sampleID)]
+
+#### create color vectors ####
+col_vec <- structure(c("#3C5488FF","#457464", "#6EA54B" ,
+                       "#d3d3d3", "#8491B4FF", "#3d2773", "#A23A32" ),
+  #as.character(pal_npg(palette = c("nrc"), alpha = 1)(8))[2:8],
+  #as.character(wes_palette("Darjeeling1", 12, type = c( "continuous")))[1:7], 
+          names = c( "Met_liver", "Met_LN", "Met_lung",  "Met_NOS",
+                     "Met_ovary","Met_perit", "recur_CRC" ))
+col_fun <- colorRamp2(c(0, 1), c("white", "dodgerblue4"))
+col_stage <- structure(c("#457464", "#6EA54B","#8491B4FF", 
+                             "#2a3b8f", "#d3d3d3"),
+                       names=c("I", "II", "III", "IV", "NA"))
+##A23A32=darkbrown, #457464=tangreen, #6EA54B=olive #C6AA19=khaki, #4DBBD5FF=skyblue, "#3C5488FF"=darkblue "#8491B4FF"=midblue
+#### annotation for concordance plot ####
+haConc <- HeatmapAnnotation(df=data.frame("sampleType"=wsConcPM$sampleType_M,
+                                          "purity_P"=wsConcPM$purity_P,
+                                          "purity_M"=wsConcPM$purity_M,
+                                          "Stage"=wsConcPM$stage),
+                            col = list( "sampleType"= col_vec,
+                                        "purity_P"= col_fun,
+                                        "purity_M"= col_fun,
+                                        "Stage"= col_stage),
+                            na_col = "grey")
+## plot concordance P&M
+pdf(paste0(plotDir,
+           "VU_vst_RF_all_best-2000-25-5_concPM_purit-stage_cHeatmap_npg.pdf"),
+    width=12, height=3)
+draw(Heatmap(t(wsConcPM[,c("nCMS_P", "nCMS_M")]),
+        name = "CMS", 
+        col = structure(paletteCMS, names = c("1", "2", "3", "4")),
+        cluster_rows = F,
+        cluster_columns = T,
+        column_split = wsConcPM$sampleType_M,
+        top_annotation = haConc
+        ))
+dev.off()
+
+
+####is there as difference in stage distributions between the met locations?
+wsConcPM$met.loc.bin <- ifelse( wsConcPM$sampleType_M=="Met_liver", "liver", "other")
+wsConcPM$stage.bin <- ifelse( wsConcPM$stage %in% c("II" ), "II", "other")
+fisher.test(table(wsConcPM$met.loc.bin, wsConcPM$stage.bin), alternative = "two")
+
+### if we only consider primaries that only metastasized to liver, is stage IV then also depleted?
+nonUniqueLiver <- which(wsConcPM$patient %in% wsConcPM$patient[duplicated(wsConcPM$patient)] 
+                     & wsConcPM$sampleType_M=="Met_liver")
+wsConcPM$stage.bin <- ifelse( wsConcPM$stage %in% c("I", "II", "III" ), "I-III", "IV")
+fisher.test(table(wsConcPM$met.loc.bin[-nonUniqueLiver], wsConcPM$stage.bin[-nonUniqueLiver]), alternative = "two")
+
+####is there as difference in CMS distributions between the met locations?
+wsConcPM$met.loc.bin <- ifelse( wsConcPM$sampleType_M=="Met_liver", "liver", "other")
+wsConcPM$met.loc.bin <- ifelse( wsConcPM$sampleType_M=="Met_perit", "perit", "other")
+
+wsConcPM$CMS2_M <- ifelse( wsConcPM$CMS_M %in% c("CMS4" ), "CMS4", "other")
+fisher.test(table(wsConcPM$met.loc.bin, wsConcPM$CMS2_M), alternative = "two")
+
+            
+```
+
+```{r}
+#### check clinical correlations again ####
+clinVU$Response_CR.y <- factor(clinVU$Response_CR.y, levels=
+                                 c("CR", "PR", "SD",  "PD"), 
+                               ordered=T)
+clinVU$Response_bin <- factor(clinVU$Response_CR.y, levels=
+                                 c("CR", "PR", "SD",  "PD"), 
+                              labels=
+                                 c("R", "R", "NR",  "NR"), 
+                               ordered=T)
+
+### plot: what are the responses from the VU predictions?
+ggplot(clinVU[which(grepl("primair CRC", clinVU$locSample) & !is.na(clinVU$OS)),] %>% 
+         dplyr::count(CMS, Response_bin, Scheme_for_analysis) %>%
+       group_by(CMS) %>% transmute(Response_bin, Scheme_for_analysis, Percentage=n/sum(n)*100), 
+       aes( Response_bin, Percentage, fill = Scheme_for_analysis )) +
+  geom_bar(stat="identity", ) +
+  theme_minimal() + 
+  facet_grid(. ~ CMS) +
+  scale_fill_manual(values = c("#3C5488FF","#457464", "#6EA54B" ,
+                       "#4DBBD5FF", "#8491B4FF", "#3d2773", "#A23A32" )[c(1,7,5)]
+                    #wes_palette("Darjeeling1", 5, type = c( "continuous"))
+                    ,na.value="#999999",
+                    name="Regimen")+#values=c("#4F2776",paletteCMS[c(2,4)])) + #
+  ggtitle("Response prim. CRC with OS")
+ggsave(paste0(plotDir,"VU_vst_RF-all_CMS_regimen_response.pdf"), height=3, width=5)
+
+
+### plot: what are the responses and CMS per treatment from the VU predictions?
+ggplot(clinVU[which(grepl("primair CRC", clinVU$locSample) & !is.na(clinVU$OS)),] %>% 
+         dplyr::count(CMS_20, Response_bin) %>%
+       group_by(CMS_20) %>% transmute(CMS_20, Response_bin, Percentage=n/sum(n)*100), 
+       aes( Response_bin, Percentage, fill = CMS_20 )) +
+  geom_bar(stat="identity", position = position_dodge(preserve = 'single')) +
+  theme_minimal() + 
+  #facet_grid(. ~ Scheme_for_analysis) +
+  scale_fill_manual(values=c(paletteCMS)) + #
+  ggtitle("Response prim. CRC with OS")
+ggsave(paste0(plotDir,"VU_vst_RF-20_CMS_regimen_response_reordered3.pdf"), height=3, width=5)
+### test whether the frequencies differ significantly
+chisq.test(table(clinVU$Response_bin[which(clinVU$CMS %in% c("CMS2", "CMS4"))], 
+                 droplevels(clinVU$CMS[which(clinVU$CMS %in% c("CMS2", "CMS4"))])))
+fisher.test(table(clinVU$Response_CR.y[which(clinVU$CMS %in% c("CMS2", "CMS4"))], 
+                 droplevels(clinVU$CMS[which(clinVU$CMS %in% c("CMS2", "CMS4"))])))
+fisher.test(table(clinVU$Response_CR.y, clinVU$CMS_20), alternative = "l")
+fisher.test(table(clinVU$Response_bin, clinVU$CMS))
+fisher.test(table(clinVU$Response_CR.y[which(clinVU$Scheme_for_analysis %in% c("Oxaliplatin") &
+                                               clinVU$CMS_20 %in% c("CMS2", "CMS4"))], 
+                 droplevels(clinVU$CMS_20[which(clinVU$Scheme_for_analysis %in% c("Oxaliplatin") &
+                                               clinVU$CMS_20 %in% c("CMS2", "CMS4"))])))
+
+### plot: what are the tissue origins from the VU predictions?
+ggplot(clinVU[which(grepl("primair CRC", clinVU$locSample) & !is.na(clinVU$OS)),] %>% 
+         dplyr::count(CMS, LRcolon) %>%
+       group_by(CMS) %>% transmute(LRcolon, perc=n/sum(n)*100), 
+       aes( CMS, perc, fill = LRcolon )) +
+  geom_bar(stat="identity", ) +
+  theme_minimal() + 
+  scale_fill_manual(values = c("#3C5488FF","#457464", "#6EA54B" ,
+                       "#4DBBD5FF", "#8491B4FF", "#3d2773", "#A23A32" )[c(7,5,6,1)]
+                    #wes_palette("Darjeeling1", 5, type = c( "continuous"))
+                    ,na.value="#d3d3d3",
+                    name="Location")+#values=c("#4F2776",paletteCMS[c(2,4)])) + #
+  ggtitle("Location prim. CRC with OS")
+ggsave(paste0(plotDir,"VU_vst_RF-all_CMS_LRcolon.pdf"), height=3, width=4)
+
+```
+
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r }
+### what is the CMS distribution in VU stages
+CMSvecN <- factor(clinVU$Stage,
+                  levels=c("I", "II", "III", "IV"),
+                  labels=c("I-II","I-II","III-IV","III-IV"),
+                  ordered = T )
+#CMSvecN[is.na(CMSvecN)] <- "NA"
+
+ggplot( data.frame("Stage"=CMSvecN[which(grepl("primair CRC", clinVU$locSample) 
+                                         & complete.cases(clinVU[,c("OS","Stage")]) )], 
+           "CMS"=clinVU$CMS[which(grepl("primair CRC", clinVU$locSample) &
+                                    complete.cases(clinVU[,c("OS","Stage")]) )]) %>%
+        dplyr::count(Stage, CMS) %>%
+       group_by(Stage) %>% transmute(CMS, perc=n/sum(n)*100), 
+       aes( Stage, perc, fill = CMS )) +
+  geom_bar(stat="identity", ) +
+  theme_minimal() + 
+  ylim(0, 100) +
+  scale_fill_manual(values=paletteCMSn) + 
+  ggtitle(paste0("Stage in CRC/met"))
+ggsave(paste0(plotDir, "Fig5_Stage_CMS_proportions_VU_barplot.pdf"),
+       width=3,height=3)
+
+##checked also MSI but there were only 3 MSI cases and the 3 CMS1 were ND/failed
+
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

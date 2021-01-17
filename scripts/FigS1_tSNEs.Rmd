@@ -1,0 +1,142 @@
+---
+title: "Figure S1"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
+
+```{r}
+#### CMS separation COAD tSNE ####
+set.seed(5678)
+tsne_model_COAD <- Rtsne( as.matrix( rc_vst_BR[,grep("hsa", colnames(rc_vst_BR))]), 
+                        check_duplicates=FALSE, 
+                        pca=TRUE, perplexity=20, theta=0.5, dims=2)
+
+ggplot(as.data.frame(tsne_model_COAD$Y), 
+       aes(x=V1, y=V2, color = rc_vst_BR$CMS))+
+  geom_point() +
+  xlab("") + ylab("") +
+  theme_minimal()+
+  scale_colour_manual(values = paletteCMS, name = "CMS")
+ggsave(paste0(plotDir,"/FigS1b_COAD-tSNE_miR_vst_BR_CMS.lv.pdf" ),
+       width=5, height=4, useDingbats=FALSE)
+
+
+#### CMS PCA COAD ####
+prin_comp <- prcomp(rc_vst_BR[,-c(grep("S", colnames(rc_vst_BR)))], scale. = T)
+var_coord_func <- function(loadings, comp.sdev){
+  loadings*comp.sdev
+}
+var.coord <- t(apply(prin_comp$rotation, 1, var_coord_func, prin_comp$sdev)) 
+head(var.coord[order(var.coord[,"PC1"]), "PC1"]) #the top features
+
+trans <- preProcess(rc_vst_BR[
+                        ,grep("hsa",colnames(rc_vst_BR))], 
+                    method=c("BoxCox",
+                             "center","scale", 
+                             "pca"),
+                    thresh = list(thresh = 0.50))
+
+PC <- predict(trans, rc_vst_BR[#-grep("AA", rownames(rc_vst_BR))
+                         ,grep("hsa",colnames(rc_vst_BR))])
+
+#### plot PCA COAD ####
+library(ggsci)
+pdf(paste0(plotDir, "FigS1_PCA_COAD_miRNA_vst_BR.pdf"),
+    onefile = T, useDingbats=FALSE)
+fviz_eig(prin_comp, type="lines", 
+         barfill = "#cfcfe6", barcolor = "#cfcfe6",
+         ggtheme = theme(axis.text=element_text(size=20),
+        axis.title=element_text(size=25))) #plot variances
+ggplot(PC,aes(x=PC1,y=PC2, 
+              colour= rc_vst_BR$CMS)) +
+  geom_point(na.rm = F) +
+  theme_minimal() +
+  scale_color_manual(values=paletteCMS)
+dev.off()
+
+
+#### CMS separation READ tSNE ####
+set.seed(5678)
+tsne_model_READ <- Rtsne( as.matrix( miR_READ_vst_BR[,1:156]), 
+                        check_duplicates=FALSE, 
+                        pca=TRUE, perplexity=20, theta=0.5, dims=2)
+
+ggplot(as.data.frame(tsne_model_READ$Y), 
+       aes(x=V1, y=V2, color = miR_READ_vst_BR$CMS.lv))+
+  geom_point() +
+  xlab("") + ylab("") +
+  theme_minimal()+
+  scale_colour_manual(values = paletteCMS, name = "CMS")
+ggsave(paste0(plotDir,"/FigS1b_READ-tSNE_miR_vst_BR_CMS.lv.pdf" ),
+       width=5, height=4, useDingbats=FALSE)
+
+
+#### CMS PCA READ ####
+prin_comp <- prcomp(miR_READ_vst_BR[,grep("hsa",colnames(miR_READ_vst_BR))], 
+                    scale. = T)
+var_coord_func <- function(loadings, comp.sdev){
+  loadings*comp.sdev
+}
+var.coord <- t(apply(prin_comp$rotation, 1, var_coord_func, prin_comp$sdev)) 
+head(var.coord[order(var.coord[,"PC1"]), "PC1"]) #the top features
+
+trans <- preProcess(miR_READ_vst_BR[
+                        ,grep("hsa",colnames(miR_READ_vst_BR))], 
+                    method=c(#"BoxCox",
+                             "center","scale", 
+                             "pca"),
+                    thresh = list(thresh = 0.50))
+
+PC <- predict(trans, miR_READ_vst_BR[
+                         ,grep("hsa",colnames(miR_READ_vst_BR))])
+
+#### plot PCA ####
+pdf(paste0(plotDir, "FigS1_PCA_READ_miRNA_vst_BR.pdf"),
+    onefile = T, useDingbats=FALSE)
+fviz_eig(prin_comp, type="lines", 
+         barfill = "#cfcfe6", barcolor = "#cfcfe6",
+         ggtheme = theme(axis.text=element_text(size=20),
+        axis.title=element_text(size=25))) #plot variances
+ggplot(PC,aes(x=PC1,y=PC2, 
+              colour= batchInfo$batch)) +
+  geom_point(na.rm = F) +
+  theme_minimal() +  scale_color_manual(values = c(wes_palette("Darjeeling1", 24, 
+                                            type = c( "continuous")) ))
+
+  scale_color_manual(values=paletteCMS)
+dev.off()
+
+
+```
+
+
+```{r}
+
+###summary stats table
+round(summary(miR_COAD_vst$CMS)/445*100,1) #this is the entire dataset of COAD without normal/extra samples
+##COAD training set
+round(summary(rc_vst_BR$CMS)/271*100,1) #this is after outlier and NA/inconsistency removal
+round(summary(factor(sub("[A,B,C]$","",clinical.coad$ajcc_pathologic_stage[which(clinical.coad$submitter_id %in% rownames(rc_vst_BR))])))/271*100,1) #this is after outlier and NA/inconsistency removal
+summary(clinical.coad$age_at_diagnosis[which(clinical.coad$submitter_id %in% rownames(rc_vst_BR))]/365)
+##READ validation set
+round(summary(miR_READ_vst_BR$CMS.lv)/158*100,1)
+round(summary(factor(sub("[A,B,C]$","",clinical.read$ajcc_pathologic_stage[which(clinical.read$submitter_id %in% rownames(miR_READ_vst_BR))])))/158*100,1) 
+summary(clinical.read$age_at_diagnosis[which(clinical.read$submitter_id %in% rownames(miR_READ_vst_BR))]/365)
+##CPTAC2 validation set
+summary(clinSupp.cptac$CMS)/105
+summary(clinSupp.cptac$Age/12)
+##VUdata
+clinVU$Stage[grep("primary_CRC",clinVU$sampleType)]/126*100 #cave one patient has 2 biopsies so for stage this is ok but for age and gender it should be 125 
+unique(clinVU$patient[grep("primary_CRC",clinVU$sampleType)])
+clinVU$patient[which(clinVU$OS!=clinVU$OS_days)]
+
+```
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Cmd+Option+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Cmd+Shift+K* to preview the HTML file). 
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+

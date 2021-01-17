@@ -13,7 +13,7 @@ paletteCMSn=c("CMS1" ="#E79E1B",
               "CMS4"="#009C74",
              "NOLBL"="#d3d3d3")
 
-## plot VU predictions
+## plot CMS predictions
 listCMSlabs <- list("COAD"= miR_COAD_vst$CMS, 
                     "READ"=miR_READ_vst_BR$CMS.lv, 
                     "CPTAC2"=clinSupp.cptac$CMS )
@@ -30,24 +30,42 @@ data.frame("CMS"=CMSvecN) %>%
   ylim(0, 110) +
   scale_fill_manual(values=c(paletteCMSn)) + #"#4F2776"
   ggtitle(paste0("CMS in ", CMSvec))
-ggsave(paste0(plotDir, "CMS_input_counts_", CMSvec, "_barplots.pdf"))
+ggsave(paste0(plotDir, "CMS_input_counts_", CMSvec, "_barplots.pdf"),
+       width=3,height=3)
 }
+```
 
-###summary stats table
-round(summary(miR_COAD_vst$CMS)/445*100,1) #this is the entire dataset of COAD without normal/extra samples
-##COAD training set
-round(summary(rc_vst_BR$CMS)/271*100,1) #this is after outlier and NA/inconsistency removal
-round(summary(factor(sub("[A,B,C]$","",clinical.coad$ajcc_pathologic_stage[which(clinical.coad$submitter_id %in% rownames(rc_vst_BR))])))/271*100,1) #this is after outlier and NA/inconsistency removal
-summary(clinical.coad$age_at_diagnosis[which(clinical.coad$submitter_id %in% rownames(rc_vst_BR))]/365)
-##READ validation set
-round(summary(miR_READ_vst_BR$CMS.lv)/158*100,1)
-round(summary(factor(sub("[A,B,C]$","",clinical.read$ajcc_pathologic_stage[which(clinical.read$submitter_id %in% rownames(miR_READ_vst_BR))])))/158*100,1) 
-summary(clinical.read$age_at_diagnosis[which(clinical.read$submitter_id %in% rownames(miR_READ_vst_BR))]/365)
-##CPTAC2 validation set
-summary(clinSupp.cptac$CMS)/105
-summary(clinSupp.cptac$Age/12)
-##VUdata
-summary(clinVU$Stage[grep("primary_CRC",clinVU$sampleType)])/126*100
+```{r}
+#### plot Stage percent ####
+listCMSlabs <- list("COAD"= as.factor( sub("Stage ", "", sub("[A-C]$" , "", 
+                                                clinical.coad$ajcc_pathologic_stage[ 
+                                                  match(rownames(rc_vst_BR), 
+                                                              clinical.coad$submitter_id)])) ), 
+                    "READ"=as.factor( sub("Stage ", "", sub("[A-C]$" , "", 
+                                                clinical.read$ajcc_pathologic_stage[ 
+                                                  match(rownames(miR_READ_vst_BR), 
+                                                              clinical.read$submitter_id)])) ),
+                    "VU"=as.factor(clinVU$Stage[grep("primary_CRC",clinVU$sampleType)] ))
+
+for (CMSvec in c("COAD","READ","VU")) {
+CMSvecN <- factor(listCMSlabs[[CMSvec]],
+                  levels=c("I", "II", "III", "IV", "NA"),
+                  ordered = T )
+CMSvecN[is.na(CMSvecN)] <- "NA"
+
+data.frame("Stage"=CMSvecN) %>%
+  #count(Stage) %>%
+  #mutate(pcStage = n / sum(n) * 100) %>% 
+  ggplot(aes(x = Stage, fill = Stage )) +
+  geom_bar(aes(y=100*(..count..)/sum(..count..))) +
+  theme_minimal() + 
+  ylim(0, 60) +
+  scale_fill_manual(values=c("#457464", "#6EA54B","#8491B4FF", 
+                             "#2a3b8f", "#d3d3d3")) + 
+  ggtitle(paste0("Stage in ", CMSvec))
+ggsave(paste0(plotDir, "Fig1_Stage_input_counts_", CMSvec, "_barplots.pdf"),
+       width=3,height=3)
+}
 
 
 ```
@@ -56,8 +74,15 @@ summary(clinVU$Stage[grep("primary_CRC",clinVU$sampleType)])/126*100
 
 You can also embed plots, for example:
 
-```{r pressure, echo=FALSE}
-plot(pressure)
-```
+```{r}
+summary(clinVU$Gender[grepl("primair CRC", clinVU$locSample)])/126*100
+# female   male   NA's 
+#     49     76      1 
+summary(clinVU$Age[grepl("primair CRC", clinVU$locSample)])
+#  Min. 1st Qu.  Median    Mean 3rd Qu.    Max.    NA's 
+# 28.00   57.00   65.00   64.45   73.00   88.00       1 
+summary(clinVU$Stage[grepl("primair CRC", clinVU$locSample)])/126*100
+# I   II  III   IV NA's 
+# 5   17   36   66    2 
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+```

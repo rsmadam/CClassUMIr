@@ -29,8 +29,18 @@ plotDir <- "/Users/ronjaadam/projects/miRNA_mCRC/CMS-miRaCl/analyses/plots/"
 
 tuMirs <- read.csv2("/Users/ronjaadam/projects/miRNA_mCRC/TuSpecUp_Neerincx-Oncgs15_S3.csv",
                     as.is=T, header = F)
-tuMirs <- sub("miR", "mir",gsub("-", ".", sub("-.p$","",tuMirs$V1)))
-tuMirs[-which(tuMirs %in% colnames(miR_COAD_vst))] #only new miRs
+tuMirs <- sub("miR", "mir", gsub("-", ".", sub("-.p$","",tuMirs$V1)))
+tuMirsDn <- read.csv2("/Users/ronjaadam/projects/miRNA_mCRC/TuSpecDn_Neerincx-Oncgs15_S4.csv",
+                    as.is=T, header = T)  
+tuMirsDn <- sub("miR", "mir", gsub("-", ".", sub("-.p$","",tuMirsDn$miRNA)))
+tuMirsDn <- sub("\\.[1,2]$", "", tuMirsDn)
+unique(tuMirsDn[which(tuMirsDn %in% colnames(miR_COAD_vst))])
+unique(tuMirsDn[which(tuMirsDn %in% rownames(importances_df[1:50,]))])#potentially useful 
+tuMirs <- unique( c(tuMirs, tuMirsDn) )
+
+unique(tuMirs[which(tuMirs %in% colnames(miR_COAD_vst))])#only new miRs and mir.92a.1 but mir.92a is also there
+
+
 #rc_vst <- miR_COAD_vst[grep("CMS", miR_COAD_vst$CMS), 
 #                       unique(tuMirs[which(tuMirs %in% colnames(miR_COAD_vst) &
 #                     tuMirs %in% colnames(VU_rc_vst))])]## CAVE this still contains non-expressed genes, which should drop out in correlated/nonvariance test
@@ -54,6 +64,7 @@ var_coord_func <- function(loadings, comp.sdev){
 var.coord <- t(apply(prin_comp$rotation, 1, var_coord_func, prin_comp$sdev)) 
 head(var.coord[order(var.coord[,"PC1"]), "PC1"]) #the top features
 tail(var.coord[order(var.coord[,"PC1"]), "PC1"])
+
 trans <- preProcess(rc_vst_BR[ #-grep("AA", rownames(rc_vst_BR))
                         ,grep("hsa",colnames(rc_vst_BR))], 
                     method=c(#"BoxCox",
@@ -240,7 +251,7 @@ out_Test <- createDataPartition(rc_vst_BR$CMS, p = .2, # this adapts to original
                                 list = FALSE, 
                                 times = 200)
 set.seed(5678) 
-for(i in c(10,20,30,40,50,60,70,75,80,90,120,150)){
+for(i in c(61:80)){
   ####################### Make the RF model ####################### 
   ##with  caret
 
@@ -330,13 +341,9 @@ for(i in c(10,20,30,40,50,60,70,75,80,90,120,150)){
  store_kap_20[[key]] <- cmat_iter_RF$overall[["Kappa"]]
  store_pval_20[[key]] <- cmat_iter_RF$overall[["AccuracyPValue"]]
  print(paste("finishing loop", i))
- pred_cptec_RF[,paste0("RF_20_CMS_sub_",i, "scaledCPTAC")] <- predict(model_RF_best_20,
-                              newdata = miR_Cptac_vst_scale,
-                              type = "raw")
- pred_cptec_RF[,paste0("RF_CMS_sub_",i, "scaledCPTAC")] <- predict(model_RF_best,
-                              newdata = miR_Cptac_vst_scale,
-                              type = "raw")
+ 
 }
+
 apply(pred_cptec_RF, 2, function(x) summary(as.factor(x)))
 #
 results_final <- resamples(store_tests_20)
@@ -351,13 +358,13 @@ plot(data.frame("Acc"=unlist(store_acc_20),
                 "Mtry"=unlist(store_mtry_20)))
 summary(unlist(store_pval))
 
-# write.csv(data.frame("Acc"=unlist(store_acc_20),
-#                      "pval"=unlist(store_pval_20),
-#                      "Kappa"=unlist(store_kap_20),
-#                      "Mtry"=unlist(store_mtry_20),
-#                      "Node"=unlist(store_nnode_20)),
+# write.csv(data.frame("Acc"=unlist(store_acc),
+#                      "pval"=unlist(store_pval),
+#                      "Kappa"=unlist(store_kap),
+#                      "Mtry"=unlist(store_mtry),
+#                      "Node"=unlist(store_nnode)),
 #           row.names = F,
-#           "analyses/tables/results_100x5cv_81-100_10x10cv_10cv_RF20.csv")
+#           "analyses/tables/results_100x5cv_51-80_10x10cv_10cv.csv")
 
 
 ### make boxplot for Accuracy and Kappa
@@ -463,8 +470,24 @@ model_RF_20_best_all <- caret::train(CMS~.,
                                   num.trees = 2000,  
                                   trControl= testingContr)
 
-
-
+model_RF_best_100_TumiRs <- caret::train(CMS~., 
+                                         data=rc_vst_BR[c(rownames(importances_df[1:100,])[
+                                           which(rownames(importances_df[1:100,]) %in% tuMirs)],#grep("hsa", colnames(rc_vst_BR), value = T), 
+                                                          "CMS")],
+                                         method="ranger", 
+                                         importance = 'impurity',
+                                         metric="Kappa", 
+                                         tuneGrid= bestParam_20, 
+                                         num.trees = 2000, #2000 is best with 5 and 5 
+                                         trControl= testingContr)
+model_RF_all_TumiRs <- caret::train(CMS~., 
+                                         data=rc_vst_BR[colnames(rc_vst_BR) %in% c(tuMirs, "CMS")],
+                                         method="ranger", 
+                                         importance = 'impurity',
+                                         metric="Kappa", 
+                                         tuneGrid= bestParam_20, 
+                                         num.trees = 2000, #2000 is best with 5 and 5 
+                                         trControl= testingContr)
 
 ##############################################################################################################
 # Predictions
@@ -500,6 +523,8 @@ VU_rc_vst$Sample.ID <- row.names(VU_rc_vst)
 VU_valid <- VU_rc_vst[,]#-grep("", row.names(VU_rc_vst)),
                      # grep("hsa", colnames(VU_rc_vst))]
 pred_rc_vst_VU_RF <- predict(model_RF_best_all, newdata = VU_valid, type = "prob")
+pred_rc_vst_VU_RF_TuMirs <- predict(model_RF_best_100_TumiRs, newdata = VU_valid, type = "prob")
+
 # function to identify where first and second predicted prob are very close together
 fCens = function(x, output) {
   ordered = sort(x, decreasing=T)
@@ -511,6 +536,9 @@ pred_rc_vst_VU_RF$CMS <- predict(model_RF_best_all,
                                     newdata = VU_valid, type = "raw")
 pred_rc_vst_VU_RF$CMS_20 <- predict(model_RF_20_best_all, 
                                  newdata = VU_valid, type = "raw")
+pred_rc_vst_VU_RF$CMS_TuMirs <- predict(model_RF_best_100_TumiRs, 
+                                        newdata = VU_valid, type = "raw")
+
 #pred_rc_vst_VU_RF$CMS[pred_rc_vst_VU_RF$ordCens] <- NA
 rownames(pred_rc_vst_VU_RF) <- rownames(VU_valid)
 pred_rc_vst_VU_RF$Sample.ID <-row.names(pred_rc_vst_VU_RF)
@@ -766,11 +794,21 @@ pred_read_RF$CMS_20 <- predict(model_RF_20_best_all,
                             newdata = miR_READ_vst_BR[selREAD
                                                    ,grep("hsa", colnames(miR_READ_vst_BR))],
                             type = "raw")
+pred_read_RF$CMS_tumiR <- predict(model_RF_best_100_TumiRs, 
+                               newdata = miR_READ_vst_BR[selREAD
+                                                         ,grep("hsa", colnames(miR_READ_vst_BR))],
+                               type = "raw")
 rownames(pred_read_RF) <- rownames(miR_READ_vst_BR[selREAD,])
 pred_read_RF$Sample.ID <-row.names(pred_read_RF)
 summary(pred_read_RF$CMS_20)
 confusionMatrix(pred_read_RF$CMS, factor(miR_READ_vst_BR$CMS.lv[selREAD]))
 confusionMatrix(pred_read_RF$CMS_20, factor(miR_READ_vst_BR$CMS.lv[selREAD]))
+
+###censoring low confidence helps:
+selConfid <- which(pred_read_RF$d2ndProb > quantile(pred_read_RF$d2ndProb, prob=.25))
+confusionMatrix(pred_read_RF$CMS[selConfid], factor(miR_READ_vst_BR$CMS.lv[selConfid]))
+selConfid <- which(pred_read_RF$d2ndProb_20 > quantile(pred_read_RF$d2ndProb_20, prob=.25))
+confusionMatrix(pred_read_RF$CMS_20[selConfid], factor(miR_READ_vst_BR$CMS.lv[selConfid]))
 
 # confusionM.READ <- data.frame("CMS1.mRNA"=c(4,0,0,0),
 #                               "CMS2.mRNA"=c(0,31,1,14),

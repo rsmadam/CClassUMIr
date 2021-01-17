@@ -1,0 +1,107 @@
+---
+title: "CMS-miRaCl Fig S2"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
+
+```{r}
+
+##plot: what is the READ concordance
+selREAD <- 1:length(miR_READ_vst_BR$CMS.lv)
+concREAD <- data.frame("CMS"=factor(c(miR_READ_vst_BR[selREAD , "CMS.lv"],
+                       as.character(pred_read_RF$CMS), as.character(pred_read_RF$CMS_20))),
+           "pat"=c(rownames(miR_READ_vst_BR[selREAD,]),
+           rownames(miR_READ_vst_BR[selREAD,]),
+           rownames(miR_READ_vst_BR[selREAD,])),
+           "type"= factor(c(rep("mRNA", length(miR_READ_vst_BR[selREAD,1])),
+                     rep("miR", length(miR_READ_vst_BR[selREAD,1])),
+                         rep("miR_RF_20", length(miR_READ_vst_BR[selREAD,1])))))
+
+#### overlap READ samples mRNA vs mirNA
+concREAD$CMS <- as.numeric(sub("CMS", "", concREAD$CMS))
+concREAD$CMS <- factor(paste0("CMS", concREAD$CMS))
+
+wideREAD <- reshape(concREAD, direction="wide", 
+                    idvar="pat", timevar = "type", v.names = "CMS")
+
+##make dataframe for heatmap 
+concREAD$CMS <- as.numeric(sub("CMS", "", concREAD$CMS))
+wideREAD <- reshape(concREAD, direction="wide", 
+                    idvar="pat", timevar = "type", v.names = "CMS")
+wideREAD$d2ndProb <- pred_read_RF$d2ndProb
+wideREAD$d2ndProb_20 <- pred_read_RF$d2ndProb_20
+wideREAD$d2ndClass <- pred_read_RF$d2ndClass_20
+
+wideREAD <- wideREAD[order(wideREAD$CMS.mRNA),]
+wideREAD$type <- factor(clinical.read$primary_diagnosis[match(wideREAD$pat, 
+                                                                   clinical.read$submitter_id)])
+wideREAD$stage <- factor(sub("[A,B,C]$","" ,clinical.read$ajcc_pathologic_stage[match(wideREAD$pat, 
+                                                         clinical.read$submitter_id)]))
+wideREAD$conc <- ifelse(wideREAD$CMS.mRNA==wideREAD$CMS.miR,
+                       "concordant", "discordant")
+rownames(wideREAD) <- make.names(wideREAD$pat, unique=T)
+
+wideREAD$conc[which(is.na(wideREAD$conc))] <- "NA"
+wideREAD$purity <- purity.ABS.read[match(rownames(wideREAD),
+                                        gsub("-",".",purity.ABS.read$TCGA.patID)),
+                                  "purity"]
+wideREAD$Ca.DNA <- purity.ABS.read[match(rownames(wideREAD),
+                                        gsub("-",".",purity.ABS.read$TCGA.patID)),
+                                  "Cancer.DNA.fraction"]
+wideREAD$mRNApredPval <- log10(data.frame("mRNApredPval"=CMS_samples$min_Pval[match(rownames(wideREAD),
+                                         gsub("-",".",CMS_samples$SampleId))])[,"mRNApredPval"])
+summary(wideREAD$d2ndProb)
+summary(wideREAD$d2ndProb_20)
+wideREAD$uncertainty <- factor(ifelse(wideREAD$d2ndProb < 0.079, 
+                        "two calls", "clear winner"))
+wideREAD$d2ndClass[which(wideREAD$uncertainty=="clear winner")] <- NA
+
+col_stage <- structure(c("#457464", "#6EA54B","#8491B4FF", "#2a3b8f"),
+                      names = levels(wideREAD$stage))
+col_type <- structure(c("dodgerblue4", "chocolate4", 
+                        "#8491B4FF", "#642060", "bisque"),
+                      names = levels(wideREAD$type))
+c("#3C5488FF", "#A23A32" )
+
+col_bin <- structure(c("white", "grey"),
+                      names = levels(wideREAD$uncertainty))
+col_fun <- colorRamp2(c(0, 1), c("white", "dodgerblue4"))
+col_fun_neg <- colorRamp2(c(0, -5), c("white", "dodgerblue4"))
+
+haConc <- HeatmapAnnotation(df=wideREAD[,c( "type", "stage",
+                                          "purity", "d2ndProb",
+                                          "d2ndProb_20", #"uncertainty",
+                                          "mRNApredPval")],
+                            col = list( stage=col_stage,
+                                        type=col_type,
+                                        purity=col_fun,
+                                        d2ndProb=col_fun,
+                                        d2ndProb_20=col_fun,
+                                        #uncertainty=col_bin,
+                                        mRNApredPval=col_fun_neg),
+                            na_col = "grey")
+## plot concordance P&M
+pdf(paste0(plotDir,
+           "READ_RF_all_wt-mRNAvsRF-allvsRF-20.pdf"),
+    width=22, height=5)
+draw(Heatmap(t(wideREAD[,c("CMS.mRNA", "CMS.miR", "CMS.miR_RF_20")]),
+             col = structure(paletteCMS, names = c("1", "2", "3", "4")),
+             cluster_rows = F,
+             cluster_columns = F, 
+             column_split=wideREAD$uncertainty,
+             top_annotation = haConc,
+             column_names_gp = gpar(fontsize = 6)
+))
+dev.off()
+
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Cmd+Option+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Cmd+Shift+K* to preview the HTML file). 
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+
