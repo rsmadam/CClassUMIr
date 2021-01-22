@@ -173,7 +173,7 @@ dev.off()
 VU_vst_surv <- cbind(clinVU, VU_rc_vst)#[,c("hsa.mir.625", "hsa.mir.592", "hsa.mir.552", 
            #"hsa.mir.218", "hsa.mir.31", "hsa.mir.375", "hsa.mir.143")])
 ##keep only primary with survival data
-VU_vst_surv <- VU_vst_surv[which(grepl("prim",#allMet
+VU_vst_surv <- VU_vst_surv[which(grepl("primary_CRC",#allMet
                        VU_vst_surv$sampleType) & !is.na(VU_vst_surv$OS)),]
 surv_object <- Surv(time = VU_vst_surv$OS, 
                     event = VU_vst_surv$Event_OS)
@@ -186,7 +186,7 @@ fit.coxph <- coxph(surv_object ~
 ggforest(fit.coxph, data = VU_vst_surv)
 ggsave(paste0(plotDir,"VU_Surv-forest_top10.pdf"), 
        height = 9, width=5)
-
+summary(fit.coxph)
 
 
 #making formulas
