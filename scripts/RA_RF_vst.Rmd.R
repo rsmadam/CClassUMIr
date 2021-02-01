@@ -471,8 +471,8 @@ model_RF_20_best_all <- caret::train(CMS~.,
                                   trControl= testingContr)
 
 model_RF_best_100_TumiRs <- caret::train(CMS~., 
-                                         data=rc_vst_BR[c(rownames(importances_df[1:100,])[
-                                           which(rownames(importances_df[1:100,]) %in% tuMirs)],#grep("hsa", colnames(rc_vst_BR), value = T), 
+                                         data=rc_vst_BR[c(rownames(importances_df[1:20,])[
+                                           which(rownames(importances_df[1:20,]) %in% tuMirs)],#grep("hsa", colnames(rc_vst_BR), value = T), 
                                                           "CMS")],
                                          method="ranger", 
                                          importance = 'impurity',

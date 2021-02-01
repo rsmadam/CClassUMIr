@@ -1,5 +1,5 @@
 ---
-title: "CMS-miRaCl_Fig5"
+title: "CMS-miRaCl_Fig5-6"
 output: html_document
 ---
 
@@ -9,7 +9,6 @@ This is an R Markdown document. Markdown is a simple formatting syntax for autho
 
 When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
 ```{r}
-#### for COAD ####
 
 library(survival)
 library(survminer)
@@ -23,82 +22,6 @@ paletteCMSn=c("CMS1" ="#E79E1B",
               "CMS3"= "#C45597",#Guinney:"#C977A4", 
               "CMS4"="#009C74",
               "NOLBL"="#d3d3d3")
-
-# ### analyse TCGA survival colon dataset
-# ##skip because TCGA survival data not reliable
-# rc_vst_surv <- cbind(clinical.coad[ match(rownames(rc_vst_BR), clinical.coad$submitter_id), ], 
-#                      "CMS"=factor(rc_vst_BR$CMS, ordered=T))
-# rc_vst_surv <- cbind(clinical.coad[ match(rownames(miR_COAD_vst), clinical.coad$submitter_id), ], 
-#                       "CMS"=factor(miR_COAD_vst$CMS.lv, ordered=T))
-# 
-# # create vector time to death containing values to censor for death
-# rc_vst_surv$OS <- as.numeric( apply(rc_vst_surv, 1, function(x) { ifelse( is.na( x["days_to_death"] ),
-#                                  x["days_to_last_follow_up"],
-#                                  x["days_to_death"] )}) )
-# 
-# # create death censoring
-# rc_vst_surv$Event_OS <- ifelse(rc_vst_surv$vital_status == 'Alive', 0, 1)
-# 
-# fit <- survfit(Surv(OS, Event_OS) ~ CMS,
-#                data = rc_vst_surv[])
-# 
-# # visualize with survminer
-# pdf(paste0(plotDir,
-#            "Fig5_SURV_COAD-rc-vst-445-cms-lv.pdf"),
-#     width=6, height=7, onefile = F)
-# print( ggsurvplot(fit, data = rc_vst_surv, risk.table = TRUE, pval = T,
-#            palette =  paletteCMS, surv.median.line = "hv", pval.method = T,
-#            xlim= c(0,2500)) )
-# dev.off()
-# 
-# rc_vst_surv_st23 <- rc_vst_surv[grep(" iv[a-c]?$",rc_vst_surv$tumor_stage, perl = T),]
-# summary(factor(rc_vst_surv_st23$tumor_stage))
-# #reduce to stage ii/iii
-# fit <- survfit(Surv(OS, Event_OS) ~ CMS,
-#                data = rc_vst_surv_st23)
-# 
-# # visualize with survminer
-# pdf(paste0(plotDir,
-#            "Fig4a_SURV_COAD-rc-vst-445-cms-lv_stage4.pdf"),
-#     width=6, height=7, onefile = F)
-# ggsurvplot(fit, data = rc_vst_surv_st23,
-#            risk.table = TRUE, pval = T,
-#            palette =  paletteCMS, surv.median.line = "hv",
-#            xlim= c(0,2500)) 
-# dev.off()
-
-```
-
-
-
-```{r}
-#### for READ ####
-# ##skip because TCGA survival data not reliable
-# ### get TCGA survival rectal dataset
-# pred_read_RF <- read.csv2(paste0(projDir, "analyses/tables/READ_predicted_RF-all_RF-20.csv"),
-#                           row.names = 1)
-# 
-# read_rc_vst_surv <- cbind(clinical.read[ match(rownames(miR_READ_vst_BR), 
-#                                                clinical.read$submitter_id), ], 
-#                           "CMS"=factor(miR_READ_vst_BR$CMS, ordered=T))
-# 
-# read_rc_vst_surv$OS <- clinical.read$days_to_last_follow_up[ match(rownames(miR_READ_vst_BR), 
-#                                                                    clinical.read$submitter_id) ]
-# read_rc_vst_surv$Event_OS <- ifelse(read_rc_vst_surv$vital_status=="Alive", 0, 1) #Surv takes 0 as alive and 1 as dead
-# read_rc_vst_surv$OS[which(read_rc_vst_surv$Event_OS == 1 )] <- read_rc_vst_surv$days_to_death[which(read_rc_vst_surv$Event_OS == 1 )]
-# 
-# fit <- survfit(Surv(OS, Event_OS) ~ CMS,
-#                data = read_rc_vst_surv)
-# 
-# # visualize with survminer
-# pdf(paste0(plotDir,
-#            "Fig4_SURV_READ-cms.pdf"),
-#     width=6, height=7)
-# print( ggsurvplot(fit, data = read_rc_vst_surv, risk.table = TRUE, pval = T,
-#            palette =  paletteCMS, surv.median.line = "hv", pval.method = T,
-#            xlim= c(0,2500)) )
-# dev.off()
-
 
 ```
 
@@ -383,7 +306,7 @@ ggplot( data.frame("Stage"=CMSvecN[which(grepl("primair CRC", clinVU$locSample)
 ggsave(paste0(plotDir, "Fig5_Stage_CMS_proportions_VU_barplot.pdf"),
        width=3,height=3)
 
-##checked also MSI but there were only 3 MSI cases and the 3 CMS1 were ND/failed
+##checked also MSI but there were only 3 MSI cases and the CMS1 were ND/failed
 
 ```
 
