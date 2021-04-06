@@ -14,10 +14,13 @@ This is an R Markdown document. Markdown is a simple formatting syntax for autho
 When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
 
 ```{r}
-
-importances_df <- read.csv("analyses/tables/val_100x5cv_10x10cv_importances.csv",
+projHome <- "/Users/ronjaadam/projects/miRNA_mCRC/CMS-miRaCl/"
+importances_df <- read.csv(paste0(projHome, "analyses/tables/val_100x5cv_10x10cv_importances.csv"),
                            row.names = 1)
-
+rc_vst_BR <- read.table(paste0(projDir,"/Data/rc_vst_BR-outl_mostVar-highlyCorr.txt"))
+VUdata <- read.csv( "data/raw/Main_merged_rounded_okt_2014.txt",
+                  sep = "\t", colClasses = c(rep("character", 2), rep("numeric", 221)))
+clinVU <- read.csv2( "/Users/ronjaadam/projects/miRNA_mCRC/CMS-miRaCl/analyses/tables/VUclin-predictedCMS_RF-all_RF-20.csv" )
 
 #### heatmaps #####
 library(circlize)
