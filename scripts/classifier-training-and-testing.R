@@ -204,7 +204,7 @@ importances_df <- importances_df[order(-importances_df$Overall),]
 
 importances_df <- read.csv("analyses/tables/val_100x5cv_10x10cv_importances.csv",
                            row.names = 1)
-
+plot(importances_df$Overall[1:50])
 
 
 ############ big RF training on all COAD data ###############
@@ -330,13 +330,15 @@ clinVU$CMS_20 <-
 ##### READ data 
 library(RColorBrewer)
 
-miR_READ_vst_BR <- read.csv(file=
-                              "/Data/TCGA-miR_READ_vst_BR_CMS-labels.csv",
+miR_READ_vst_BR <- read.csv(file=paste0(getwd(),
+                              "/Data/TCGA-miR_READ_vst_BR_CMS-labels.csv"),
                             row.names = 1)
 miR_READ_vst
 selREAD <- 1:length(miR_READ_vst_BR$CMS.cl.rf)#which(  
   #grepl("CMS", miR_READ_vst_BR$CMS.lv ) &
     #miR_READ_vst_BR$CMS.lv == miR_READ_vst_BR$CMS.cl.rf)
+
+### prediction
 pred_read_RF <- predict(model_RF_best_all,
                         newdata = miR_READ_vst_BR[selREAD,],
                                                   #which(miR_READ_vst_BR$CMS.lv == miR_READ_vst_BR$CMS.cl.rf)]),],
@@ -371,21 +373,40 @@ pred_read_RF$CMS_20 <- predict(model_RF_20_best_all,
                             newdata = miR_READ_vst_BR[selREAD
                                                    ,grep("hsa", colnames(miR_READ_vst_BR))],
                             type = "raw")
-pred_read_RF$CMS_tumiR <- predict(model_RF_best_100_TumiRs, 
-                               newdata = miR_READ_vst_BR[selREAD
-                                                         ,grep("hsa", colnames(miR_READ_vst_BR))],
-                               type = "raw")
+# pred_read_RF$CMS_tumiR <- predict(model_RF_best_100_TumiRs, 
+#                                newdata = miR_READ_vst_BR[selREAD
+#                                                          ,grep("hsa", colnames(miR_READ_vst_BR))],
+#                                type = "raw")
 rownames(pred_read_RF) <- rownames(miR_READ_vst_BR[selREAD,])
 pred_read_RF$Sample.ID <-row.names(pred_read_RF)
 summary(pred_read_RF$CMS_20)
-confusionMatrix(pred_read_RF$CMS, factor(miR_READ_vst_BR$CMS.lv[selREAD]))
-confusionMatrix(pred_read_RF$CMS_20, factor(miR_READ_vst_BR$CMS.lv[selREAD]))
+
+### comparison prediction results to mRNA based CMS
+cm <- confusionMatrix(pred_read_RF$CMS, factor(miR_READ_vst_BR$CMS.lv[selREAD]))[['table']]
+cm_20 <- confusionMatrix(pred_read_RF$CMS_20, factor(miR_READ_vst_BR$CMS.lv[selREAD]))[['table']]
+confusionMatrix(pred_read_RF$CMS, factor(miR_READ_vst_BR$CMS.lv[selREAD]))[['table']]
+confusionMatrix(pred_read_RF$CMS_20, factor(miR_READ_vst_BR$CMS.lv[selREAD]))[['table']]
+
+### per class Accuracy can be calculated as correctly predicted as that class / all predicted as that class
+diag(cm)/rowSums(cm)
+diag(cm_20)/rowSums(cm_20)
+
+### confusionMatrix Overall Accuracy can be reconstructed like this as all true predicted  / all predicted 
+calculate.accuracy <- function(predictions, ref.labels) {
+  print(length(ref.labels[!is.na(ref.labels)]))
+  return(length(which(predictions == ref.labels)) / length(ref.labels[!is.na(ref.labels)]))
+}
+calculate.accuracy(pred_read_RF$CMS, factor(miR_READ_vst_BR$CMS.lv[selREAD]))
+calculate.accuracy(pred_read_RF$CMS_20, factor(miR_READ_vst_BR$CMS.lv[selREAD]))
+
 
 ###censoring low confidence helps:
 selConfid <- which(pred_read_RF$d2ndProb > quantile(pred_read_RF$d2ndProb, prob=.25))
 confusionMatrix(pred_read_RF$CMS[selConfid], factor(miR_READ_vst_BR$CMS.lv[selConfid]))
 selConfid <- which(pred_read_RF$d2ndProb_20 > quantile(pred_read_RF$d2ndProb_20, prob=.25))
 confusionMatrix(pred_read_RF$CMS_20[selConfid], factor(miR_READ_vst_BR$CMS.lv[selConfid]))
+
+
 
 
 ##########################################

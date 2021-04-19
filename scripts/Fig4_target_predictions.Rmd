@@ -1,0 +1,355 @@
+---
+title: "Fig4"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r }
+library(data.table)
+library(ComplexHeatmap)
+library(circlize)
+
+##### this is to read in tables from target predictions of TargetScan, miRTarBase, and miRDB
+miRTARb <- data.frame(read.csv("/Users/ronjaadam/projects/miRNA_mCRC/CMS-miRaCl/analyses/target-predictions/miRTarBase_hsa_MTI_top20.csv",
+                               stringsAsFactors = F, blank.lines.skip = T, 
+                               skipNul = T, na = c("", "NA", "\n"),) )# miRNA Target.Gene
+
+miRTargetScan <- data.frame(rbindlist( lapply( list.files(path="/Users/ronjaadam/projects/miRNA_mCRC/CMS-miRaCl/analyses/target-predictions/", pattern = "TargetScan7.2.*", full.names = T), fread, sep="\t"), fill=T ))#Target gene Representative miRNA
+
+miRDB <- data.frame(rbindlist( lapply( list.files(path="/Users/ronjaadam/projects/miRNA_mCRC/CMS-miRaCl/analyses/target-predictions/", pattern = "miRDB.*", full.names = T), fread), fill=T )) #miRNA Name Gene Symbol
+
+
+### the DE target genes
+upGenes <- list()
+dnGenes <- list()
+anyGenes <- list()
+
+# for(cms in paste0("CMS", 1:4)){
+#    deGenes <- read.csv(paste0("/Users/ronjaadam/projects/miRNA_mCRC/CMS-miRaCl/analyses/DE-results/resSigTable-COAD-GA-mRNA-LV-CMS-", cms,".csv"), sep=",", stringsAsFactors = F) #summary(abs(deGenes$log2FoldChange)) FC cutoff is 1.8
+#    deGenes$biotype <- mapIds(geneDBEns86,
+#                         keys=deGenes$symbol,
+#                         column="GENEBIOTYPE",
+#                         keytype="SYMBOL",
+#                         multiVals="first")
+#    upGenes[[paste0("up", cms)]] <- deGenes[which(deGenes$log2FoldChange > 0 &
+#                                                         deGenes$biotype == "protein_coding"),
+#                                                 "symbol"]
+#    dnGenes[[paste0("dn", cms)]] <- deGenes[which(deGenes$log2FoldChange < 0 &
+#                                                         deGenes$biotype == "protein_coding"),
+#                                                 "symbol"]
+#    anyGenes[[paste0("any", cms)]] <- deGenes[,"symbol"]
+# }
+
+#try using the 200 highest or lowest genes
+for(cms in paste0("CMS", 1:4)){
+   deGenes <- read.csv(paste0("/Users/ronjaadam/projects/miRNA_mCRC/CMS-miRaCl/analyses/DE-results/rankGSEA-",cms,"-stat.rnk"), sep="\t", stringsAsFactors = F, header = F) 
+   upGenes[[paste0("up", cms)]] <- tail(deGenes$V1,200)
+   dnGenes[[paste0("dn", cms)]] <- head(deGenes$V1,200)
+}
+
+###need n top targets for each mir
+miRTARb$miR.Target <- factor(paste0(miRTARb$miRNA,".", miRTARb$Target.Gene))
+miRTARb$References.PMID <- factor(miRTARb$References..PMID.)
+miRTargets <- dplyr::full_join(miRTARb %>% 
+                                 group_by(miRNA, Target.Gene, Support.Type) 
+                               %>% summarise(n = n()), unique(miRTargetScan[,c(1:5,14,19)]), 
+                        by=c("miRNA"= "Representative.miRNA", 
+                             "Target.Gene"="Target.gene"))
+miRTargets <- dplyr::full_join(miRTargets, miRDB, 
+                               by=c("miRNA"= "miRNA.Name", 
+                                    "Target.Gene"="Gene.Symbol"))
+##clean
+miRTargets <- miRTargets[-grep("Gene Symbol", miRTargets$Target.Gene),]
+miRTargets <- miRTargets[!is.na( miRTargets$Target.Gene),]
+miRTargets <- miRTargets[!is.na( miRTargets$miRNA),]
+miRTargets <- miRTargets[-grep("^$", miRTargets$Target.Gene),]
+miRTargets$Total.sites <- as.numeric(sub("\\*","",miRTargets$Total.sites))
+miRTargets[ ,"Target.Score"] <- as.numeric(miRTargets$Target.Score)
+
+##make NAs to 0s
+for (i in c("n", "Conserved.sites.total", "Total.sites", "Target.Score")){
+  miRTargets[is.na(miRTargets[,i]),i] <- 0
+}
+
+##create score
+miRTargets$Score.across <- miRTargets$n+(miRTargets$Conserved.sites.total*2)+
+  (miRTargets$Total.sites/5)+(miRTargets$Target.Score/100)
+miRTargets$Score.across[which(miRTargets$Support.Type=="Functional MTI")] <- miRTargets$Score.across[which(miRTargets$Support.Type=="Functional MTI")]*2
+miRTargets <- miRTargets[order(miRTargets$Score.across, decreasing = T),]
+
+
+
+#### read in HALLMARK gene sets 
+hallmark_wide <- read.csv2("/Users/ronjaadam/projects/ref-human/GeneSets/h.all.v7.4.entrez.gmt",
+                           sep="\t", header = F)
+hallmark_long <- pivot_longer(hallmark_wide, cols = -c("V1", "V2"), names_to = "GeneID")
+hallmark_names <- unique(data.frame("pathway"=sub("HALLMARK_", "", hallmark_long$V1),
+                                    "link"=hallmark_long$V2))
+hallmark_genes <- data.frame("GeneID"=hallmark_long$value, 
+                             "pathway"=sub("HALLMARK_", "", hallmark_long$V1))
+hallmark_genes <- hallmark_genes[complete.cases(hallmark_genes),]
+
+```
+
+
+
+```{r}
+
+# ##start pdf
+# pdf(paste0(plotDir, "/Upset_upgenesCMS1234_top30_miRs_top500.pdf"), useDingbats = F,
+#     onefile = T, height = unit(4, "cm"),
+#      width = unit(10, "cm"))
+top20Mirs <- c("hsa-miR-625", "hsa-miR-592", "hsa-miR-552",
+               "hsa-miR-218", "hsa-miR-31", "hsa-miR-375",
+               "hsa-miR-143", "hsa-miR-615", "hsa-miR-335",
+               "hsa-miR-146b",
+               "hsa-miR-99a", "hsa-miR-92b", "hsa-miR-141",
+               "hsa-miR-942", "hsa-miR-3170", "hsa-miR-30a",
+               "hsa-miR-362", "hsa-miR-582", "hsa-miR-155", "hsa-miR-92a"
+               )
+targetMiRsDF <- data.frame(matrix(nrow=0,ncol=20))
+colnames(targetMiRsDF) <- top20Mirs
+
+for(cms in paste0("dn", "CMS", 1:4)) {
+  ##create empty containers
+  keggPWDF.union <- data.frame(matrix(nrow = 0, ncol = 6, 
+                                      dimnames = list(c(), c("Pathway", "N", "DE", "P.DE", "adjP", "miR"))) )
+  goBPDF.union <- data.frame(matrix(nrow = 0, ncol = 7, 
+                                    dimnames = list(c(), c("Term", "Ont", "N", "DE",
+                                                           "P.DE", "adjP", "miR"))) )
+  
+  hallmPWDF.union <- data.frame(matrix(nrow = 0, ncol = 7, 
+                                    dimnames = list(c(), c("Term", "Ont", "N", "DE",
+                                                           "P.DE", "adjP", "miR"))) )
+  targetGenes <- list()
+
+  #make list of the genes predicted as targets and the DE genes to compare overlap
+  for(mir in top20Mirs){
+    ##use pairs of similar expression patterns to enrich make search more robust
+    # for(mir in list("CMS1"=c("31-", "155"),
+    #                 "CMS2"=c("592","335"),
+    #                 "CMS3"=c("375", "625"),
+    #                 "CMS4"=c("218", "143"))){
+    miRTARbGenes <- as.character( miRTARb[ grep(mir[1], miRTARb$miRNA), 
+                                           "Target.Gene"])
+    miRTargGenes <- miRTargetScan[ grep(mir[1], miRTargetScan$Representative.miRNA), 
+                                   "Target.gene"]
+    miRDBGenes <- miRDB[grep(mir[1], miRDB$miRNA.Name), "Gene.Symbol"]
+    listTargets <- list("miRTarBase1"=unique(miRTARbGenes),
+                        "TargetScan1"=unique(miRTargGenes), 
+                        "miRDB1"=unique(miRDBGenes)  )
+    # miRTARbGenes <- as.character( miRTARb[ grep(mir[2], miRTARb$miRNA), 
+    #                                        "Target.Gene"])
+    # miRTargGenes <- miRTargetScan[ grep(mir[2], miRTargetScan$Representative.miRNA), 
+    #                                "Target.gene"]
+    # miRDBGenes <- miRDB[grep(mir[2], miRDB$miRNA.Name), "Gene.Symbol"]
+    # listTargets <- append(listTargets, list( "miRTarBase2"=unique(miRTARbGenes),
+    #                     "TargetScan2"=unique(miRTargGenes), 
+    #                     "miRDB2"=unique(miRDBGenes)  ))
+    # test what intersection is  most useful
+    print( mir )
+    # print(summary(factor(miRTargets$miRNA[grep(mir[1], miRTargets$miRNA)])))
+    # print(summary(factor(miRTargets$miRNA[grep(mir[2], miRTargets$miRNA)])))
+    #print(summary(miRTargets$Score.across[grep(mir, miRTargets$miRNA)]))
+    print("intersecting 3 db")
+    print( length( unique( intersect( intersect(miRTARbGenes, miRTargGenes),
+                                      miRDBGenes) ) ) ) #intersect all 3
+    # print("in both")
+    # print( length( unique( intersect(unique(unlist(listTargets[1:3])),
+    #                                    unique(unlist(listTargets[4:6]))))  )) #intersect all 3
+    print("any 2 db")
+    print( length( unlist(listTargets)[duplicated(unlist(listTargets))] ) ) #intersect any 2
+    # #longest is any 2
+    print("all")
+    print( length( unlist(listTargets) ) ) #all
+    
+    
+    # targetGenes[[paste(mir, collapse="&")]] <- unique( intersect(unique(unlist(listTargets[1:3])),
+    #                                    unique(unlist(listTargets[4:6]))))  #in both miRs   
+    # unname(unlist(listTargets)[duplicated(unlist(listTargets))])#intersect any 2
+    
+    
+    ### filter info from all databases for miR of interest
+    targetCand <- miRTargets[grep(mir, miRTargets$miRNA), ]
+    
+    ### use listTargets for intersection between any 2 databases
+    targetGenes[[mir]] <- unlist(listTargets)[duplicated(unlist(listTargets))] 
+    
+    ### AND this for overlap with downregulated genes per CMS
+    targetGenes[[mir]] <- targetGenes[[mir]][targetGenes[[mir]] %in% unname(unlist(dnGenes[[cms]]))]
+    
+    # ### OR this for only overlap with downregulated genes, without requiring 2 databases
+    # targetGenes[[mir]] <- targetCand$Target.Gene[targetCand$Target.Gene %in%
+    #                                               unname(unlist(dnGenes[[cms]]))]
+
+    ### combine selection step with info from all databases for miR of interest
+    targetCand <- targetCand[targetCand$Target.Gene %in% targetGenes[[mir]], ]
+     miRTargets[grep("AXIN2", miRTargets$Target.Gene),]
+    ### take only 200 best target predictions
+    ### keep only symbol
+    if(length(targetCand$Score.across) > 200) {
+      targetCand <- head( unique( targetCand$Target.Gene[ 
+        order(targetCand$Score.across, decreasing=T ) ] ), 200 )
+    }
+    else{ targetCand <- unique( targetCand$Target.Gene ) }
+    
+    targetGenes[[mir]] <- targetCand
+
+    print( length(targetGenes[[mir]]))
+    
+    
+    ### to make combinatorial mat for upset plot
+
+    # mat <- make_comb_mat( append(anyGenes,
+    #                              list("targetPredicted2x"=targetGenes[[mir]])))
+    # 
+    # mat <- make_comb_mat( append(anyGenes,
+    #                              list("top.cross.score"=targetGenes[[mir]])))
+    
+    # #### plot upset plot with complexheatmap ####
+    # print( UpSet(mat,
+    #              set_order = c(paste0("any", "CMS", 1:4), "top.cross.score"),
+    #                            #"miRTarBase", "TargetScan", "miRDB" ),
+    #       comb_order = order(comb_size(mat), decreasing = T), #flip left to right
+    #       top_annotation = HeatmapAnnotation(
+    #       "Intersection" = anno_barplot(comb_size(mat), #make the top barplots log scale
+    #                                                border = FALSE, 
+    #                                                # axis_param = list( at = c(5, 10, 30, 500, 1000),
+    #                                                #                    scale="log"),
+    #                                                height = unit(3, "cm"))),
+    #       left_annotation = rowAnnotation(
+    #         "# genes" = anno_barplot(set_size(mat),
+    #                                   border = FALSE,
+    #                                   axis_param = list(                                                                      direction = "reverse"), # use for down regulated geens
+    #                                   width = unit(3, "cm"))),
+    #       right_annotation = NULL,
+    #       column_title = paste0("# targets ", mir, " or DEG in CMS")
+    # ) )
+    
+    
+    #### PATHWAY enrichment: Convert gene IDs for KEGG function #CAVE: some genes will not be converted
+    ids <- clusterProfiler::bitr(targetCand, fromType = "SYMBOL", 
+                                 toType = "ENTREZID", OrgDb="org.Hs.eg.db")
+    dedup_ids = ids[!duplicated(ids[c("SYMBOL")]),]
+    # keggpw <- limma::kegga(de=dedup_ids$ENTREZID)
+    # keggpw$adjP <- keggpw$P.DE*length(keggpw$Pathway)
+    # keggpw <- dplyr::filter(keggpw,  DE>1, P.DE < 0.05)
+    # if(length(keggpw$Pathway) >0 ){
+    # keggpw$miR <- paste(mir, collapse="&")
+    # keggPWDF.union <- rbind(keggPWDF.union, keggpw)}
+    # enrgo <- limma::goana(de=dedup_ids$ENTREZID)
+    # enrgo <- dplyr::filter(enrgo, Ont == "BP")
+    # enrgo$adjP <- enrgo$P.DE*length(enrgo$Ont)
+    # enrgo <- dplyr::filter(enrgo,  DE>1, P.DE < 0.05)
+    # enrgo <- slice_min(enrgo, order_by = adjP, n=5)
+    # if(length(enrgo$Ont) >0 ){enrgo$miR <-  paste(mir, collapse="&")
+    # goBPDF.union <- rbind(goBPDF.union, enrgo)}
+    hallmpw <- limma::kegga(de=dedup_ids$ENTREZID, 
+                            pathway.names=hallmark_names,
+                            gene.pathway=hallmark_genes)
+    hallmpw$adjP <- hallmpw$P.DE*length(hallmpw$Pathway)
+    hallmpw <- dplyr::filter(hallmpw,  DE>1, P.DE < 0.1)
+    if(length(hallmpw$Pathway) >0 ){
+    hallmpw$miR <- paste(mir, collapse="&")
+    hallmPWDF.union <- rbind(hallmPWDF.union, hallmpw)
+    }
+  }
+  #dev.off()
+  
+   targetGenesDF <- data.frame(lapply(targetGenes, "length<-", max(lengths(targetGenes))))
+   targetMiRsDF <- rbind(targetMiRsDF, data.frame(targetGenesDF, "CMS"=cms))
+   targetGenesDF <- rbind("", targetGenesDF ) # empty row for gmx to use in GSEA
+   write.table(targetGenesDF, quote = F, na = "", row.names = F, sep = "\t",
+              paste0(projDir, "analyses/target-predictions/20miRs_any2db_200-",cms,".gmx")) ## need to add row under header
+    write.csv2(hallmPWDF.union, quote = T, na = "", row.names = T,
+             paste0(projDir, "analyses/target-predictions/limma-HALLMARK-20miRs_any2db_unique_max200_200",cms,"_pval0.1.csv"))
+    # write.csv2(goBPDF.union[order(goBPDF.union$adjP), ], quote = T, na = "", row.names = T,
+    #          paste0(projDir, "analyses/target-predictions/limma-GOana_top5_20miRs-max200_200-",cms,".csv"))
+    # keggPWDF.union <- keggPWDF.union[!duplicated(keggPWDF.union[,1:6]),]
+    # write.csv2(keggPWDF.union[order(keggPWDF.union$adjP),], quote = T, na = "", row.names = T,
+    #          paste0(projDir, "analyses/target-predictions/limma-KEGGana_20miRs_in2miRpairs-top500.csv")) 
+}
+
+   write.csv2(targetMiRsDF, quote = T, na = "", row.names = T,
+              paste0(projDir, "analyses/target-predictions/20miRs_any2db_200-dnCMS.csv")) ## need to add row under header
+
+
+```
+
+## Including Plots PATHWAYS
+```{r}
+### make a heatmap with square fields with pathways one the rows and mirs on the columns and CMS color as a color, if selcted for downregulation in that CMS
+dfPW <- data.frame(matrix(nrow = 0, ncol = 7, 
+                                      dimnames = list(c(), 
+                                                      c("Pathway", "N", "DE", 
+                                                        "P.DE", "adjP", "miR", "CMS"))) ) 
+for(cms in paste0("CMS", 1:4)) {
+  ##create empty containers
+  dfPW <- rbind(dfPW, data.frame(cbind(read.csv2(paste0("/Users/ronjaadam/projects/miRNA_mCRC/CMS-miRaCl/analyses/target-predictions/limma-HALLMARK-20miRs_any2db_unique_max200_200dn",cms,"_pval0.1.csv")), "CMS"=cms)) )
+}
+dfPW <- dplyr::filter(dfPW, adjP < 0.1) # the adjP accounts for multiple testing, but we want some pathways left
+dfPW$PW <- sub("1?[0-9]$", "", dfPW$X)
+dfPW_wide <- pivot_wider(dfPW[,7:9], names_from = miR, values_from = CMS, 
+                         values_fn = list(CMS = first))
+dfPW_allM <- data.frame(matrix(nrow = length(dfPW_wide$PW), ncol= 20, 
+                               dimnames = list(dfPW_wide$PW, top20Mirs)))
+colnames(dfPW_allM) <- gsub("\\.", "-", colnames(dfPW_allM))
+
+dfPW_mat <- full_join(dfPW_wide, dfPW_allM)
+dfPW_mat <- dfPW_mat[!is.na(dfPW_mat$PW), top20Mirs]
+rownames(dfPW_mat) <- dfPW_wide$PW
+
+paletteCMSn=c("CMS1" ="#E79E1B", 
+                "CMS2"= "#0071B1", 
+                "CMS3"= "#C45597",#Guinney:"#C977A4", 
+                "CMS4"="#009C74",
+              "NOLBL"="#d3d3d3")
+colors = structure(paletteCMSn) # black, red, green, blue
+
+pdf(paste0(projDir, "analyses/target-predictions/HALLMARK-20miRs_any2db_unique_max200_200dnCMS_pval0.1.pdf"), width=8, height=length(dfPW_mat$`hsa-miR-625`)/2 )
+Heatmap(dfPW_mat, name = "mat", 
+      col = colors, 
+      na_col = "white", width = 5, height=4, rect_gp = gpar(col="#d3d3d3"),
+      row_names_side = "left", column_names_side ="top",show_heatmap_legend = F,
+    column_title = "miR-targets (2db) amongst\ndownregulated genes\noverlap important pathways", 
+      )
+dev.off()
+
+
+dfPW <- data.frame(read.csv2("/Users/ronjaadam/projects/miRNA_mCRC/CMS-miRaCl/analyses/target-predictions/limma-HALLMARK-20miRs-any2-max200.csv"), "CMS"="NOLBL") #use NOLBL here for the results obtained from not overlapping with downregulated
+
+dfPW$PW <- sub("1?[0-9]$", "", dfPW$X)
+dfPW_wide <- pivot_wider(dfPW[,c(5,7,9)], names_from = miR, values_from = P.DE)
+
+dfPW_allM <- data.frame(matrix(nrow = length(dfPW_wide$PW), ncol= 20, 
+                               dimnames = list(dfPW_wide$PW, top20Mirs)))
+colnames(dfPW_allM) <- gsub("\\.", "-", colnames(dfPW_allM))
+
+dfPW_mat <- full_join(dfPW_wide, dfPW_allM)
+dfPW_mat <- dfPW_mat[!is.na(dfPW_mat$PW), top20Mirs]
+rownames(dfPW_mat) <- dfPW_wide$PW
+
+col_fun = colorRamp2(c(0, 0.1), c("darkblue", "white"))
+
+pdf(paste0(projDir, "analyses/target-predictions/HALLMARK_20miRs-targets-max200_pval0.1_raster.pdf"), width=8, height=length(dfPW_mat$`hsa-miR-625`)/3.5 )
+Heatmap(dfPW_mat, name = "p.value", #one-sided hypergeometric tests equivalent to Fisher's exact test
+      col = col_fun, 
+      cluster_rows = F, cluster_columns = F,
+      na_col = "#d3d3d3", width = 5, height=4, rect_gp = gpar(col="white"),
+      row_names_side = "left", column_names_side ="top",
+    column_title = "miR-targets show potential overlap\nwith HALLMARK pathways\n(one-sided hypergeometric test)",
+      )
+dev.off()
+
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
