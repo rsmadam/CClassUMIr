@@ -310,4 +310,65 @@ ggsave(paste0(plotDir, "Fig5_Stage_CMS_proportions_VU_barplot.pdf"),
 
 ```
 
+
+```{r}
+library(survival)
+library(survminer)
+library(RTCGA.clinical)
+
+### for TCGA survival data 
+clinical.coad <- GDCquery_clinic(project = c("TCGA-COAD"), type = "clinical")
+clinical.read <- GDCquery_clinic(project = c("TCGA-READ"), type = "clinical")
+clinical <- rbind(clinical.coad[,c("days_to_death", "submitter_id", 
+                                "ajcc_pathologic_stage", "days_to_last_follow_up", 
+                                "site_of_resection_or_biopsy")], 
+                  clinical.read[,c("days_to_death", "submitter_id", 
+                                  "ajcc_pathologic_stage", "days_to_last_follow_up", 
+                                  "site_of_resection_or_biopsy")])
+dim(miR_COAD_vst[grepl("CMS", miR_COAD_vst$CMS), ])
+dim(miR_READ_vst[grepl("CMS", miR_READ_vst$CMS), ])
+
+rc_vst_surv <- clinical[match(rownames(miR_COAD_vst), 
+                                   clinical$submitter_id ),]
+rc_vst_surv$Event_OS <- ifelse(is.na(rc_vst_surv$days_to_death), 0, 1) #death=Event=1
+rc_vst_surv$OS <- rc_vst_surv$days_to_death
+rc_vst_surv$OS[is.na(rc_vst_surv$days_to_death)] <- rc_vst_surv$days_to_last_follow_up[is.na(rc_vst_surv$days_to_death)]
+# rc_vst_surv$CMS <- predictedCMS.READ$RF[match(rownames(miR_COAD_vst), 
+#                                            rownames(predictedCMS.READ))]
+rc_vst_surv$CMS <- miR_COAD_vst$CMS
+rc_vst_surv$Stage <- rc_vst_surv$ajcc_pathologic_stage
+rc_vst_surv$Stage <- sub("IV","4",rc_vst_surv$Stage)
+rc_vst_surv$Stage <- sub("III","3",rc_vst_surv$Stage)
+rc_vst_surv$Stage <- sub("II","2",rc_vst_surv$Stage)
+rc_vst_surv$Stage <- sub("I","1",rc_vst_surv$Stage)
+summary(factor(rc_vst_surv$site_of_resection_or_biopsy))
+
+## OS COAD RF-all
+fit_coad <- survfit(Surv(OS, Event_OS) ~ CMS,
+                  data = rc_vst_surv[grepl("", rc_vst_surv$Stage) & 
+                                       grepl("CMS", rc_vst_surv$CMS),])
+
+# visualize with survminer
+pdf(paste0(plotDir,
+           "FigS_CRC_CMS.rf.cl_st4_survOS.pdf"),
+    width=6, height=7, onefile = F, useDingbats = F)
+print( ggsurvplot(fit_coad, data = rc_vst_surv[,
+  c( "OS", "Event_OS", "CMS")],
+  risk.table = TRUE, pval = T,  xlim=c(0,2000),
+  palette = c(paletteCMS[],"grey") ))
+dev.off()
+
+surv_object <- Surv(time = rc_vst_surv$OS, 
+                    event = rc_vst_surv$Event_OS)
+fit.coxph <- coxph(surv_object ~
+                  hsa.mir.625 + hsa.mir.592 + hsa.mir.552 +
+                    hsa.mir.218 + hsa.mir.31 + hsa.mir.375 +
+                    hsa.mir.143 +hsa.mir.615 + hsa.mir.335 +
+                    hsa.mir.146b,
+                   data = miR_COAD_vst)
+ggforest(fit.coxph, data = miR_COAD_vst)
+
+
+```
+
 Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

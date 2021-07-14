@@ -304,6 +304,7 @@ pred_rc_vst_VU_RF$Sample.ID <-row.names(pred_rc_vst_VU_RF)
 summary(pred_rc_vst_VU_RF$CMS)
 
 ### test if result differs when predicting only the primary samples
+rownames(VU_rc_vst)==clinVU$sampleID
 pred_VU_prim_CMS <- data.frame("CMS.prim"=predict(model_RF_best_all, 
                             newdata = VU_rc_vst[grep("primary",clinVU$sampleType),], 
                             type = "raw")) #predict only primary
@@ -391,7 +392,7 @@ confusionMatrix(pred_read_RF$CMS_20, factor(miR_READ_vst_BR$CMS.lv[selREAD]))[['
 diag(cm)/rowSums(cm)
 diag(cm_20)/rowSums(cm_20)
 
-### confusionMatrix Overall Accuracy can be reconstructed like this as all true predicted  / all predicted 
+### confusionMatrix Overall Accuracy can be reconstructed like this as all true positive predicted  / all predicted 
 calculate.accuracy <- function(predictions, ref.labels) {
   print(length(ref.labels[!is.na(ref.labels)]))
   return(length(which(predictions == ref.labels)) / length(ref.labels[!is.na(ref.labels)]))

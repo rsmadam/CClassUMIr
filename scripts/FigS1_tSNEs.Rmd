@@ -59,18 +59,26 @@ dev.off()
 
 
 #### CMS separation READ tSNE ####
+paletteCMSn=c("CMS1" ="#E79E1B", 
+              "CMS2"= "#0071B1", 
+              "CMS3"= "#C45597",#Guinney:"#C977A4", 
+              "CMS4"="#009C74",
+              "NOLBL"="#d3d3d3")
 set.seed(5678)
 tsne_model_READ <- Rtsne( as.matrix( miR_READ_vst_BR[,1:156]), 
                         check_duplicates=FALSE, 
                         pca=TRUE, perplexity=20, theta=0.5, dims=2)
+read.CMS.lv.nolabl <- factor(miR_READ_vst_BR$CMS.lv, levels=c(paste0("CMS", 1:4),
+                                                              "NOLBL"))
+read.CMS.lv.nolabl[is.na(read.CMS.lv.nolabl)] <- "NOLBL"
 
 ggplot(as.data.frame(tsne_model_READ$Y), 
-       aes(x=V1, y=V2, color = miR_READ_vst_BR$CMS.lv))+
+       aes(x=V1, y=V2, color = read.CMS.lv.nolabl))+
   geom_point() +
   xlab("") + ylab("") +
   theme_minimal()+
-  scale_colour_manual(values = paletteCMS, name = "CMS")
-ggsave(paste0(plotDir,"/FigS1b_READ-tSNE_miR_vst_BR_CMS.lv.pdf" ),
+  scale_colour_manual(values = paletteCMSn, name = "CMS")
+ggsave(paste0(plotDir,"/FigS1b_READ-tSNE_miR_vst_BR_CMS.lv.nolbl.pdf" ),
        width=5, height=4, useDingbats=FALSE)
 
 

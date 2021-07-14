@@ -59,6 +59,9 @@ CMS_samples <- CMS_samples[!duplicated(CMS_samples$SampleId),]
 CMS_samples_official <- read.table(file = "Data/cms_labels_public_all.txt")
 CMS_samples$CMS_final_netw_RF <- CMS_samples_official$V5[match(CMS_samples$SampleId, 
                                                                as.character(CMS_samples_official$V1))]
+CMS_samples$CMS_RFclassifier <- CMS_samples_official$V4[match(CMS_samples$SampleId, 
+                                                               as.character(CMS_samples_official$V1))]
+
 remove(CMS_samples_official)
 
 

@@ -88,7 +88,7 @@ miRTargets <- miRTargets[order(miRTargets$Score.across, decreasing = T),]
 
 
 
-#### read in HALLMARK gene sets 
+#### read in HALLMARK gene sets
 hallmark_wide <- read.csv2("/Users/ronjaadam/projects/ref-human/GeneSets/h.all.v7.4.entrez.gmt",
                            sep="\t", header = F)
 hallmark_long <- pivot_longer(hallmark_wide, cols = -c("V1", "V2"), names_to = "GeneID")
@@ -97,6 +97,16 @@ hallmark_names <- unique(data.frame("pathway"=sub("HALLMARK_", "", hallmark_long
 hallmark_genes <- data.frame("GeneID"=hallmark_long$value, 
                              "pathway"=sub("HALLMARK_", "", hallmark_long$V1))
 hallmark_genes <- hallmark_genes[complete.cases(hallmark_genes),]
+HallmarkGenesSymbols <- clusterProfiler::bitr(hallmark_long$value, fromType = "ENTREZID", 
+                                              toType = "SYMBOL", OrgDb="org.Hs.eg.db")
+hallmark_long$symbol <- HallmarkGenesSymbols$SYMBOL[match(hallmark_long$value,
+                                                          HallmarkGenesSymbols$ENTREZID)]
+intersect(targetMiRsDF$hsa.miR.625, hallmark_long$symbol[grepl("CATENIN", hallmark_long$V1)])
+intersect(targetMiRsDF$hsa.miR.625, hallmark_long$symbol[grepl("EPITHELIAL_MESENCHYMAL", hallmark_long$V1)])
+intersect(targetMiRsDF$hsa.miR.30a, hallmark_long$symbol[grepl("MYC_TARGETS_V1", hallmark_long$V1)])
+intersect(targetMiRsDF$hsa.miR.30a, hallmark_long$symbol[grepl("E2F_TARGETS", hallmark_long$V1)])
+intersect(targetMiRsDF$hsa.miR.30a, hallmark_long$symbol[grepl("E2F_TARGETS", hallmark_long$V1)])
+intersect(targetMiRsDF$hsa.miR.141, hallmark_long$symbol[grepl("KRAS_SIGNALING_UP", hallmark_long$V1)])
 
 ```
 
@@ -268,10 +278,10 @@ for(cms in paste0("dn", "CMS", 1:4)) {
    targetGenesDF <- data.frame(lapply(targetGenes, "length<-", max(lengths(targetGenes))))
    targetMiRsDF <- rbind(targetMiRsDF, data.frame(targetGenesDF, "CMS"=cms))
    targetGenesDF <- rbind("", targetGenesDF ) # empty row for gmx to use in GSEA
-   write.table(targetGenesDF, quote = F, na = "", row.names = F, sep = "\t",
-              paste0(projDir, "analyses/target-predictions/20miRs_any2db_200-",cms,".gmx")) ## need to add row under header
-    write.csv2(hallmPWDF.union, quote = T, na = "", row.names = T,
-             paste0(projDir, "analyses/target-predictions/limma-HALLMARK-20miRs_any2db_unique_max200_200",cms,"_pval0.1.csv"))
+   # write.table(targetGenesDF, quote = F, na = "", row.names = F, sep = "\t",
+   #            paste0(projDir, "analyses/target-predictions/20miRs_any2db_200-",cms,".gmx")) ## need to add row under header
+   #  write.csv2(hallmPWDF.union, quote = T, na = "", row.names = T,
+   #           paste0(projDir, "analyses/target-predictions/limma-HALLMARK-20miRs_any2db_unique_max200_200",cms,"_pval0.1.csv"))
     # write.csv2(goBPDF.union[order(goBPDF.union$adjP), ], quote = T, na = "", row.names = T,
     #          paste0(projDir, "analyses/target-predictions/limma-GOana_top5_20miRs-max200_200-",cms,".csv"))
     # keggPWDF.union <- keggPWDF.union[!duplicated(keggPWDF.union[,1:6]),]
@@ -281,7 +291,8 @@ for(cms in paste0("dn", "CMS", 1:4)) {
 
    write.csv2(targetMiRsDF, quote = T, na = "", row.names = T,
               paste0(projDir, "analyses/target-predictions/20miRs_any2db_200-dnCMS.csv")) ## need to add row under header
-
+## genes set sizes any 2 db
+median(c(1697, 1024, 881, 199, 1588, 236, 930, 957, 140, 70, 365, 376, 502, 972, 156, 922, 1615, 1353, 361, 1282))
 
 ```
 
@@ -307,6 +318,27 @@ colnames(dfPW_allM) <- gsub("\\.", "-", colnames(dfPW_allM))
 dfPW_mat <- full_join(dfPW_wide, dfPW_allM)
 dfPW_mat <- dfPW_mat[!is.na(dfPW_mat$PW), top20Mirs]
 rownames(dfPW_mat) <- dfPW_wide$PW
+dfPW$CMS.PW <- paste0(dfPW$CMS, ".",dfPW$PW)
+## identify minimal P per pathway
+minP <- dfPW %>% group_by(CMS.PW) %>% summarise(minP=first(P.DE)) 
+dfPW$minP <- minP$minP[match(dfPW$CMS.PW, minP$CMS.PW)]
+##keep best pathway per CMS
+minPW <- dfPW %>% group_by(CMS) %>% summarise(minPW=first(P.DE)) 
+dfPW$minPW <- minPW$minPW[match(dfPW$CMS, minPW$CMS)]
+dfPW <- dfPW[which(dfPW$P.DE == dfPW$minP),]
+dfPW$miR.PW <- paste0(dfPW$miR, " -> ",dfPW$PW)
+
+### make dotplot instead of heatmap with x axis CMS, y axis pathway and dotsize p-value
+ggplot(dfPW, 
+       aes(x=CMS, y=miR.PW, color = CMS, size=-log10(minP)))+
+  geom_point() +
+  #xlab("") + ylab("") +
+  theme_minimal()+
+  scale_color_manual(values =paletteCMSn) +
+  scale_size_area() 
+ggsave(paste0(projDir, "analyses/target-predictions/HALLMARK-20miRs_any2db_unique_max200_200dnCMS_pval0.1_lowestperCMS.pdf"), height = 2.5, width=6, useDingbats=F)
+
+
 
 paletteCMSn=c("CMS1" ="#E79E1B", 
                 "CMS2"= "#0071B1", 
