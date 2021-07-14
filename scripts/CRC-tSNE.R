@@ -45,38 +45,7 @@ TCGARnaseqDF.COAD <- read.csv(paste0(projDir,"/Data/TCGA-COAD-mRNA-GA-HiSeq_scal
 predictedCMS.COAD <- read.csv(paste0(projDir, "/Data/TCGA-COAD-allRNA-01Aonly_CMS-labels.csv"),
                     row.names = 1)
 
-
 ################### get COAD miRNA from TCGA ################
-
-## fetch TCGA COAD miRNAs:
-query.exp <- GDCquery(project = c("TCGA-COAD", "TCGA-READ"),
-                      legacy = F,
-                      data.category = "Transcriptome Profiling",
-                      data.type = "miRNA Expression Quantification",
-                      experimental.strategy = "miRNA-Seq"
-)
-GDCdownload(query.exp)
-TCGARnaseqSE <- GDCprepare(query= query.exp, summarizedExperiment = F, save = F)
-TCGAmiR.CRC <- TCGARnaseqSE[,grep("read_count_", colnames(TCGARnaseqSE)) ] #or normalized_count_ for normalized_results
-colnames(TCGAmiR.CRC) <- sub("read_count_","",colnames(TCGAmiR.CRC))
-rownames(TCGAmiR.CRC) <- TCGARnaseqSE$miRNA_ID
-remove(TCGARnaseqSE)
-##TCGA data has similar counts for isomirs, summarize by mean up
-TCGAmiR.CRC$miRcomb <- sub("-[1-9]$","",row.names(TCGAmiR.CRC))
-miR_CRC_comb <- as.data.frame(TCGAmiR.CRC %>% dplyr::group_by(miRcomb) %>%
-                                 dplyr::summarise_if(.predicate = function(x) is.numeric(x),
-                                                     .funs = mean)) #affects around 180miRNA
-row.names(miR_CRC_comb) <- miR_CRC_comb$miRcomb #afterwards remove column 1
-miR_CRC_comb$miRcomb <- NULL
-##keep only one sample per patient
-colnames(miR_CRC_comb) <- sub("-01A-.*","",colnames(miR_CRC_comb))
-miR_CRC_comb <- miR_CRC_comb[,-grep("-.+-.+-.+-.+", colnames(miR_CRC_comb) )] #get rid of 20 normal and extra samples
-miR_CRC_comb <- miR_CRC_comb[,!duplicated(colnames(miR_CRC_comb))] #miR_CRC_comb more duplicated patients
-# ##normalize, in right direction for RF
-# miR_CRC_vst <- as.data.frame( t( varianceStabilizingTransformation(
-#   as.matrix( round( miR_CRC_comb, 0 ) ) ) ) )
-# colnames(miR_CRC_vst) <- gsub("-", ".", colnames(miR_CRC_vst))
-# 
 
 
 ########## CMS labels ############

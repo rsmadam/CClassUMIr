@@ -1,0 +1,740 @@
+---
+title: "Rebuttal2"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+miR_COAD_vst <- read.table( "Data/miR_COAD_vst_CMS.txt") #here the outliers and non-classifiable are still in but the normal/extra samples are out
+miR_COAD_vst$CMS.guin <- CMS_samples_official$V5[match(rownames(miR_COAD_vst), 
+                                                               as.character(CMS_samples_official$V1))]
+summary(miR_COAD_vst$CMS_guin.RF)
+summary(miR_COAD_vst$CMS.guin)
+summary(as.character(miR_COAD_vst$CMS_guin.RF) == as.character(miR_COAD_vst$CMS.guin))
+summary(as.character(miR_COAD_vst$CMS.cl.rf) == as.character(miR_COAD_vst$CMS.guin))
+summary(as.character(miR_COAD_vst$CMS.cl.rf) == as.character(miR_COAD_vst$CMS.lv))
+CMS_samples[which(is.na(CMS_samples$CMS)), "CMS"] <- "NOLBL"
+miR_COAD_vst$CMS.lv <- CMS_samples$CMS[match(rownames(miR_COAD_vst), 
+                                             CMS_samples$SampleId)]
+summary(factor(miR_COAD_vst$CMS.lv))
+miR_COAD_vst$CMS.cl.rf <- factor(miR_COAD_vst$CMS.cl.rf, levels=c(paste0("CMS", 1:4), "NOLBL"))
+miR_COAD_vst$CMS.cl.rf[which(is.na(miR_COAD_vst$CMS.cl.rf))] <- "NOLBL"
+
+
+####################################
+#### predictions on COAD samples that were previously unclassifiable #####
+rc_vst_BR_test <- rc_vst_limBatchRem[-which(rownames(rc_vst_limBatchRem) %in% 
+                                              rownames(rc_vst_BR)), 
+                                     grep("hsa", colnames(rc_vst_BR), value = T)]
+pred_COAD_test <- predict(model_RF_best_all, newdata = rc_vst_BR_test, type = "prob")
+pred_COAD_test$CMS <- predict(model_RF_best_all, newdata = rc_vst_BR_test, type = "raw")
+pred_COAD_test$CMS_20 <- predict(model_RF_20_best_all, newdata = rc_vst_BR_test, type = "raw")
+rownames(pred_COAD_test) <- rownames(rc_vst_limBatchRem)[-which(rownames(rc_vst_limBatchRem) %in%
+                                                                  rownames(rc_vst_BR))]
+
+
+
+data.frame("CMS"=pred_COAD_test$CMS) %>% 
+  ggplot(aes(x = CMS, fill = CMS )) +
+  geom_bar() +
+  theme_minimal() + 
+  ylim(0, 110) +
+  scale_fill_manual(values=c(paletteCMSn)) + #"#4F2776"
+  ggtitle(paste0("CMS in COAD nontraining"))
+ggsave(paste0(plotDir, "CMS_input_counts_COAD-nontrain_barplots.pdf"),
+       width=3,height=3)
+
+predictedCMS.COAD <- read.csv(paste0(projDir, "/Data/TCGA-COAD-allRNA-01Aonly_CMS-labels.csv"),
+                    row.names = 1)
+
+summary(grepl("CMS[1-4]",miR_COAD_vst$CMS.lv) & grepl("CMS[1-4]",miR_COAD_vst$CMS.guin) & 
+          grepl("CMS[1-4]",miR_COAD_vst$CMS.cl.rf) )
+summary(miR_COAD_vst$CMS.lv == miR_COAD_vst$CMS.guin & miR_COAD_vst$CMS.guin == miR_COAD_vst$CMS.cl.rf )
+
+summary( predictedCMS.COAD$LV.table == predictedCMS.COAD$RF & 
+          predictedCMS.COAD$miRNAdata)
+labelsCMS.COAD.mirdata <- miR_COAD_vst[,c("CMS.lv", "CMS.guin" , "CMS_guin.RF", "CMS.cl.rf")]
+labelsCMS.COAD.mirdata <- apply(labelsCMS.COAD.mirdata, 2, as.character)
+labelsCMS.COAD.mirdata <- as.data.frame(apply(labelsCMS.COAD.mirdata, 2, function(x){paste0(x, "")}))
+labelsCMS.COAD.mirdata <- as.data.frame(apply(labelsCMS.COAD.mirdata, 2, function(x){sub("NA",
+                                                                                         "NOMATCH",
+                                                                                         x)}))
+
+labelsCMS.COAD.mir.nontrain <- labelsCMS.COAD.mirdata[match(rownames(pred_COAD_test),
+                                                       rownames(miR_COAD_vst)),]
+labelsCMS.COAD.mir.nontrain$CMS.miR <- as.character(pred_COAD_test$CMS)
+
+summary(labelsCMS.COAD.mir.nontrain$CMS.miR, labelsCMS.COAD.mir.nontrain$CMS.cl.rf)
+  
+############ plot the concordance within mRNA sample labels #####
+library("ggalluvial")
+paletteCMSn=c("CMS1" ="#E79E1B", 
+              "CMS2"= "#0071B1", 
+              "CMS3"= "#C45597",#Guinney:"#C977A4", 
+              "CMS4"="#009C74",
+              "NOLBL"="#d3d3d3",
+              "NOMATCH"="#999999")
+
+ggplot(as.data.frame(labelsCMS.COAD.mir.nontrain),
+       aes(axis1=CMS.lv, axis2 =  CMS.guin)) +
+  geom_alluvium(aes(fill = CMS.lv), width = 1/12) +
+  geom_stratum(width = 1/12, fill = rev(c(rep(paletteCMSn[1:6],1), 
+                                          paletteCMSn[(1:6)])), color = "grey") +
+  scale_x_discrete(limits = c("CMS.lv", "CMS.guin"), expand = c(.05, .05)) +
+  scale_fill_manual(values = paletteCMSn) +
+  theme_minimal() + 
+  ggtitle("nontraining set COAD CMS")
+
+ggplot(as.data.frame(labelsCMS.COAD.mir.nontrain),
+       aes(axis1 = CMS.miR, axis2 = CMS.guin)) +
+  geom_alluvium(aes(fill = CMS.miR), width = 1/12) +
+  geom_stratum(width = 1/12, fill = rev(c(rep(paletteCMSn[1:6], 1), 
+                                          paletteCMSn[1:4])), color = "grey") +
+  scale_x_discrete(limits = c("RF.miR", "guin.table.RF"), expand = c(.05, .05)) +
+  scale_fill_manual(values = paletteCMSn) +
+  theme_minimal() + 
+  ggtitle("nontraining set COAD CMS")
+ggsave(paste0(plotDir, "CMS_mRNA_COAD-nontrain_alluvial.pdf"),
+       width=6,height=6)
+
+ggplot(as.data.frame(labelsCMS.COAD.mir.nontrain),
+       aes(axis1 =  CMS.miR, axis2 = CMS.cl.rf,  axis3 = CMS.guin, axis4 =  CMS.lv)) +
+  geom_alluvium(aes(fill = CMS.miR), width = 1/12) +
+  geom_stratum(width = 1/12, fill = rev(c(rep(paletteCMSn[1:6], 2), paletteCMSn[1:5],
+                                          paletteCMSn[1:4])), color = "grey") +
+  scale_x_discrete(limits = c("miRaCl", "RF.mRNA", "guin.table","lv.table"), expand = c(.05, .05)) +
+  scale_fill_manual(values = paletteCMSn) +
+  theme_minimal() + 
+  ggtitle("nontraining set COAD CMS")
+ggsave(paste0(plotDir, "CMS_mRNA_COAD-nontrain_alluvial.pdf"),
+       width=6,height=6)
+
+```
+
+
+```{r}
+##### normalize COAD and READ together and plot tSNE #####
+
+## fetch TCGA CRC miRNAs:
+query.exp <- GDCquery(project = c("TCGA-COAD", "TCGA-READ"),
+                      legacy = F,
+                      data.category = "Transcriptome Profiling",
+                      data.type = "miRNA Expression Quantification",
+                      experimental.strategy = "miRNA-Seq"
+)
+GDCdownload(query.exp)
+TCGARnaseqSE <- GDCprepare(query= query.exp, summarizedExperiment = F, save = F)
+TCGAmiR.CRC <- TCGARnaseqSE[,grep("read_count_", colnames(TCGARnaseqSE)) ] #or normalized_count_ for normalized_results
+colnames(TCGAmiR.CRC) <- sub("read_count_","",colnames(TCGAmiR.CRC))
+rownames(TCGAmiR.CRC) <- TCGARnaseqSE$miRNA_ID
+remove(TCGARnaseqSE)
+
+##TCGA data has similar counts for isomirs, summarize by mean up
+TCGAmiR.CRC$miRcomb <- sub("-[1-9]$","",row.names(TCGAmiR.CRC))
+miR_CRC_comb <- as.data.frame(TCGAmiR.CRC %>% dplyr::group_by(miRcomb) %>%
+                                 dplyr::summarise_if(.predicate = function(x) is.numeric(x),
+                                                     .funs = mean)) #affects around 180miRNA
+row.names(miR_CRC_comb) <- miR_CRC_comb$miRcomb #afterwards remove column 1
+miR_CRC_comb$miRcomb <- NULL
+
+##keep only one sample per patient
+colnames(miR_CRC_comb) <- sub("-01A-.*","",colnames(miR_CRC_comb))
+miR_CRC_comb <- miR_CRC_comb[,-grep("-.+-.+-.+-.+", colnames(miR_CRC_comb) )] #get rid of 20 normal and extra samples
+miR_CRC_comb <- miR_CRC_comb[,!duplicated(colnames(miR_CRC_comb))] 
+
+##normalize, in right direction for RF
+miR_CRC_vst <- as.data.frame( t( varianceStabilizingTransformation(
+  as.matrix( round( miR_CRC_comb, 0 ) ) ) ) )
+colnames(miR_CRC_vst) <- gsub("-", ".", colnames(miR_CRC_vst))
+
+## make annotation for batch correction
+tssAnnotCRC <- data.frame("CMS"=c(miR_COAD_vst$CMS.cl.rf, 
+                 miR_READ_vst_BR$CMS.cl.rf)[match(rownames(miR_CRC_vst),
+                                                  c(rownames(miR_COAD_vst), 
+                                                    rownames(miR_READ_vst_BR)))])
+tssAnnotCRC$CMS <- paste0("CMS", tssAnnotCRC$CMS)
+rownames(tssAnnotCRC) <- c(rownames(miR_COAD_vst), 
+                 rownames(miR_READ_vst_BR))[match(rownames(miR_CRC_vst),
+                                                  c(rownames(miR_COAD_vst), 
+                                                    rownames(miR_READ_vst_BR)))]
+tssAnnotCRC$TSS <- sub("-.*","", sub( "TCGA-", "", rownames(tssAnnotCRC) ) )
+designM <- model.matrix( ~ 0+ tssAnnotCRC$CMS )
+crc_vst_limBatchRem <- t(limma::removeBatchEffect(t(miR_CRC_vst[,grep("hsa",
+                                                                colnames(miR_CRC_vst))]), 
+                                                 design = designM,
+                                                 batch=tssAnnotCRC$TSS) )
+colCRC <- factor( sub("-.*","",sub("TCGA-","",rownames(miR_CRC_vst))), 
+                  levels = c(levels( factor( sub("-.*","",sub("TCGA-","",rownames(miR_COAD_vst))) ) ), 
+                  levels( factor( sub("-.*","",sub("TCGA-","",rownames(miR_READ_vst_BR))) ) )), 
+                  ordered=T)
+shOrgan <- ifelse(colCRC %in% levels( factor( sub("-.*","",sub("TCGA-","",rownames(miR_COAD_vst))) ) ), 
+                  "colon", "rectum")
+
+
+
+### tSNE raw:
+set.seed(5678)
+tsne_model_CRC <- Rtsne( as.matrix( t(miR_CRC_comb[grep("hsa", rownames(miR_CRC_comb)),
+                                                 match(rownames(miR_CRC_vst),
+                                                       colnames(miR_CRC_comb))])), 
+                          check_duplicates=F, 
+                          pca=TRUE, perplexity=20, 
+                          theta=0.5, dims=2)
+
+ggplot(as.data.frame(tsne_model_CRC$Y), 
+       aes(x=V1, y=V2, color = colCRC, shape=shOrgan))+
+  geom_point() +
+  xlab("") + ylab("") +
+  theme_minimal()+
+  scale_color_manual(values =c( c(wes_palette("Darjeeling1", 25, 
+                                              type = c( "continuous")) ),#[1:25], 
+                                c(wes_palette("Moonrise3", 26,  type = c( "continuous"))[1:13] )))
+
+ggsave(paste0(plotDir,"/CRCcomb-tSNE_raw.pdf" ), useDingbats=F )
+
+
+### tSNE pre BR:
+set.seed(5678)
+tsne_model_CRC <- Rtsne( as.matrix( miR_CRC_vst[,
+                                                   grep("hsa", colnames(miR_CRC_vst))]), 
+                          check_duplicates=F, 
+                          pca=TRUE, perplexity=20, 
+                          theta=0.5, dims=2)
+
+ggplot(as.data.frame(tsne_model_CRC$Y), 
+       aes(x=V1, y=V2, color = colCRC, shape=shOrgan))+
+  geom_point() +
+  xlab("") + ylab("") +
+  theme_minimal()+
+  scale_color_manual(values =c( c(wes_palette("Darjeeling1", 25, 
+                                            type = c( "continuous")) ),#[1:25], 
+                     c(wes_palette("Moonrise3", 26,  type = c( "continuous"))[1:13] )))
+
+ggsave(paste0(plotDir,"/CRCcomb-tSNE_rc_vst_pre-limBR.pdf" ), useDingbats=F )
+
+### tSNE pre and post BR:
+set.seed(5678)
+tsne_model_CRC <- Rtsne( as.matrix( crc_vst_limBatchRem[,
+                                                   grep("hsa", colnames(crc_vst_limBatchRem))]), 
+                          check_duplicates=F, 
+                          pca=TRUE, perplexity=20, 
+                          theta=0.5, dims=2)
+
+ggplot(as.data.frame(tsne_model_CRC$Y), 
+       aes(x=V1, y=V2, color = colCRC, shape=shOrgan))+
+  geom_point() +
+  xlab("") + ylab("") +
+  theme_minimal()+
+  scale_color_manual(values =c( c(wes_palette("Darjeeling1", 25, 
+                                            type = c( "continuous")) ),#[1:25], 
+                     c(wes_palette("Moonrise3", 26,  type = c( "continuous"))[1:13] )))
+
+ggsave(paste0(plotDir,"/CRCcomb-tSNE_rc_vst_limBR.pdf" ), useDingbats=F )
+
+###test whether prediction from miRaCl is different between READ normalized together with COAd or READ normalized alone
+pred_CRC_test <- predict(model_RF_best_all, newdata = crc_vst_limBatchRem, type = "prob")
+pred_CRC_test$CMS <- predict(model_RF_best_all, newdata = crc_vst_limBatchRem, type = "raw")
+pred_CRC_test$CMS_20 <- predict(model_RF_20_best_all, newdata = crc_vst_limBatchRem, type = "raw")
+rownames(pred_CRC_test) <- rownames(crc_vst_limBatchRem)
+pred_CRC_test$Sample.ID <- rownames(pred_CRC_test) 
+pred_CRC_test$norm <- "comb"
+pred_read_RF$norm<- "READ"
+pred_CRC_comb <- rbind(pred_CRC_test[,colnames(pred_CRC_test)], 
+                       pred_read_RF[,colnames(pred_CRC_test)])
+pred_CRC_comb <- pivot_longer(pred_CRC_comb, cols = c(paste0("CMS", 1:4)))
+pred_CRC_comb <- pivot_wider(pred_CRC_comb, id_cols = c("Sample.ID", "name"),
+                             names_from = c("norm"),
+                             values_from = c("value"))
+pred_CRC_comb$CMS <- factor(pred_CRC_comb$name)
+  
+ggplot(pred_CRC_comb, aes(x=READ, y=comb, color=CMS, fill=CMS) ) + 
+  geom_point()+
+  facet_grid(pred_CRC_comb$CMS) +
+  scale_colour_manual(values=paletteCMSn, name="CMS") +
+  scale_fill_manual(values=paletteCMSn, name="CMS") +
+  theme_minimal() +
+  geom_smooth(method = "lm", show.legend = F) +
+  stat_cor() 
+
+ggsave(paste0(plotDir, "READ_separatevscomb-vst-BR_correlation_miRaClpred.pdf"),
+       width=5, height=10, useDingbats=FALSE)
+
+
+pred_CRC_comb <- rbind(pred_CRC_test[,colnames(pred_CRC_test)], 
+                       pred_read_RF[,colnames(pred_CRC_test)])
+pred_CRC_comb <- pivot_wider(pred_CRC_comb[,c("Sample.ID", "norm", "CMS")], 
+                   id_cols = c("Sample.ID"),
+                             names_from = c("norm"),
+                             values_from = c("CMS"))
+
+ggplot(pred_CRC_comb[!is.na(pred_CRC_comb$READ),],
+       aes(axis1 = READ , axis2 = comb)) +
+  geom_alluvium(aes(fill = READ), width = 1/12) +
+  geom_stratum(width = 1/12, fill = rev(c(paletteCMSn[1:4], paletteCMSn[1:4])), color = "grey") +
+  scale_x_discrete(limits = c("miRaCl.sep.n.", "miRaCl.comb.n."), expand = c(.05, .05)) +
+  scale_fill_manual(values = paletteCMSn) +
+  theme_minimal() + 
+  ggtitle("different normalizations READ miRaCl pred.")
+ggsave(paste0(plotDir, "READ_separatevscomb-vst-BR_alluvial_miRaClpred.pdf"),
+       width=4,height=6)
+```
+
+
+```{r}
+##### classifier for only expressed CPTAC miRs? Or using only the highest coverage samples? 
+### mean coverage around 2 reads per miR is too low, max is 17, compared to median meanCov of 1700 in COAD/READ, min 220
+miR_Cptac_comb_colon <- miR_Cptac_comb[,which(colnames(miR_Cptac_comb) %in% clinSupp.cptac$sample.label)] ##reduce to colon
+hist(rowSums(miR_Cptac_comb_colon), breaks=200)
+hist(rowSums(miR_Cptac_vst), breaks=200)
+rowSums(miR_Cptac_comb_colon)[head(order(rowSums(miR_Cptac_comb_colon), decreasing = T),30)]
+### clinical data CPTAC2 colon from GDC website 
+clin.cptac.gdc <- read.csv2("/Users/ronjaadam/projects/miRNA_mCRC/CMS-miRaCl/Data/CPTAC2_colon_clinical.cases_selection.2021-06-08/clinical.tsv", sep= "\t")
+
+#### get CPTAC mRNA data to get details on CMS probs 
+CPTAC.Rna.RSEM <- read.csv("/Users/ronjaadam/projects/miRNA_mCRC/CMS-miRaCl/Data/Human__CPTAC_COAD__UNC__RNAseq__HiSeq_RNA__03_01_2017__BCM__Gene__BCM_RSEM_UpperQuartile_log2.cct", sep="\t")
+CPTAC.Rna.RSEM$ENTREZ <- sub(".*\\|","", oldRowNames)[match(CPTAC.Rna.RSEM$attrib_name,
+                                                           sub("\\|.*","",oldRowNames))]
+rownames( CPTAC.Rna.RSEM ) <- sub("^X","",make.names( CPTAC.Rna.RSEM$ENTREZ, unique = T ))
+
+CMScptac.RSEM <- classifyCMS(CPTAC.Rna.RSEM[,grep("^X", colnames(CPTAC.Rna.RSEM))], method="RF")$RF.details
+summary(factor(CMScptac.RSEM$RF.predictedCMS))
+
+
+##whats the sample distruibution
+colSums(miR_Cptac_comb_colon)[head(order(colSums(miR_Cptac_comb_colon), decreasing = T),30)]
+hist(colMeans(miR_Cptac_comb_colon), breaks=100) #only few have a higher coverage
+
+miR_Cptac_sub_vst <- as.data.frame( t( varianceStabilizingTransformation(
+  as.matrix( round( miR_Cptac_comb_colon[,which(colMeans(miR_Cptac_comb_colon)>7)], 0 ) ) ) ) )
+  
+inCPTAC <- colSums(miR_Cptac_sub_vst)[which(colnames(miR_Cptac_sub_vst) %in% 
+                                            rownames(importances_df)[1:20] & 
+                                           colSums(miR_Cptac_sub_vst) > 10) ]
+higherCPTAC <- gsub("-",".",names(colSums(miR_Cptac_comb_colon)[head(order(colSums(miR_Cptac_comb_colon),
+                                                              decreasing = T),50)]))
+
+
+#### try to train on COAD miR rpm 
+query.exp <- GDCquery(project = c("TCGA-COAD"),
+                      legacy = F,
+                      data.category = "Transcriptome Profiling",
+                      data.type = "miRNA Expression Quantification",
+                      experimental.strategy = "miRNA-Seq"
+)
+GDCdownload(query.exp)
+TCGARnaseqSE <- GDCprepare(query= query.exp, summarizedExperiment = F, save = F)
+TCGAmiR.COAD.rpm <- TCGARnaseqSE[,grep("reads_per_million_", colnames(TCGARnaseqSE)) ] 
+colnames(TCGAmiR.COAD.rpm) <- sub("reads_per_million_miRNA_mapped_","",colnames(TCGAmiR.COAD.rpm))
+rownames(TCGAmiR.COAD.rpm) <- TCGARnaseqSE$miRNA_ID
+remove(TCGARnaseqSE)
+
+##TCGA data has similar counts for isomirs, summarize by mean up
+TCGAmiR.COAD.rpm$miRcomb <- sub("-[1-9]$","",row.names(TCGAmiR.COAD.rpm))
+miR_COAD_comb_rpm <- as.data.frame(TCGAmiR.COAD.rpm %>% dplyr::group_by(miRcomb) %>%
+                                 dplyr::summarise_if(.predicate = function(x) is.numeric(x),
+                                                     .funs = mean)) #affects around 180miRNA
+row.names(miR_COAD_comb_rpm) <- miR_COAD_comb_rpm$miRcomb #afterwards remove column 1
+miR_COAD_comb_rpm$miRcomb <- NULL
+
+##keep only one sample per patient
+colnames(miR_COAD_comb_rpm) <- sub("-01A-.*","",colnames(miR_COAD_comb_rpm))
+miR_COAD_comb_rpm <- miR_COAD_comb_rpm[,-grep("-.+-.+-.+-.+", colnames(miR_COAD_comb_rpm) )] #get rid of 20 normal and extra samples
+miR_COAD_comb_rpm <- miR_COAD_comb_rpm[,!duplicated(colnames(miR_COAD_comb_rpm))] #no more duplicated patients
+miR_COAD_rpm_qn <- as.data.frame( t(quantile_normalisation(miR_COAD_comb_rpm))) 
+
+miR_COAD_rpm_qn$CMS <- miR_COAD_vst$CMS[match(rownames(miR_COAD_rpm_qn), rownames( miR_COAD_vst ))]
+colnames(miR_COAD_rpm_qn) <- gsub("-", ".", colnames(miR_COAD_rpm_qn) )
+
+
+#### try to test on CPTAC miR rpm 
+TCGARnaseqSE <- read.csv("/Users/ronjaadam/projects/miRNA_mCRC/CMS-miRaCl/Data/CPTAC2_GDCquery_miRNA-Seq_SE.csv")
+TCGAmiR.CPTAC.rpm <- TCGARnaseqSE[,grep("reads_per_million_", colnames(TCGARnaseqSE)) ] #or normalized_count_ for normalized_results
+colnames(TCGAmiR.CPTAC.rpm) <- sub("reads_per_million_miRNA_mapped_","",colnames(TCGAmiR.CPTAC.rpm))
+rownames(TCGAmiR.CPTAC.rpm) <- TCGARnaseqSE$miRNA_ID
+remove(TCGARnaseqSE)
+
+TCGAmiR.CPTAC.rpm <- read.csv("/Users/ronjaadam/projects/miRNA_mCRC/CMS-miRaCl/Data/Human__CPTAC_COAD__UNC__miRNAseq__GA_miR__03_01_2017__BCM__Gene__BCM_log2.cct", sep="\t")
+
+
+##TCGA data has apparently similar counts for isomirs, summarize by mean up
+TCGAmiR.CPTAC.rpm$miRcomb <- sub("-[1-9]$","",row.names(TCGAmiR.CPTAC.rpm))
+TCGAmiR.CPTAC.rpm$miRcomb <- sub("-[3,5]p$","",TCGAmiR.CPTAC.rpm$attrib_name) # for table from Vasaikar publication chnage summarize to sum
+
+miR_CPTAC_comb_rpm <- as.data.frame(TCGAmiR.CPTAC.rpm %>% dplyr::group_by(miRcomb) %>%
+                                 dplyr::summarise_if(.predicate = function(x) is.numeric(x),
+                                                     .funs = mean)) #affects around 180miRNA
+row.names(miR_CPTAC_comb_rpm) <- miR_CPTAC_comb_rpm$miRcomb #afterwards remove column 1
+miR_CPTAC_comb_rpm$miRcomb <- NULL
+miR_CPTAC_comb_rpm <- miR_CPTAC_comb_rpm[,which(colnames(miR_CPTAC_comb_rpm) %in%
+                                                 gsub("-",".",clinSupp.cptac$sample.label))]#only colon
+miR_CPTAC_rpm_qn <- as.data.frame( t(quantile_normalisation(
+  miR_CPTAC_comb_rpm))) # classifier not improved
+colnames(miR_CPTAC_rpm_qn) <- gsub("-", ".", colnames(miR_CPTAC_rpm_qn) )
+colnames(miR_CPTAC_rpm_qn) <- gsub("miR", "mir", colnames(miR_CPTAC_rpm_qn) )
+
+
+set.seed(5678)
+model_RF_cptac_19 <- caret::train(CMS~., 
+                                  data=miR_COAD_rpm_qn[grep("CMS", miR_COAD_rpm_qn$CMS),
+                                                       c(names(inCPTAC),
+                                      "CMS")],
+                                  method="ranger", 
+                                  importance = 'impurity',
+                                  metric="Kappa", 
+                                  tuneGrid= bestParam_20, 
+                                  num.trees = 2000,  
+                                  trControl= testingContr)
+
+pred_CPTAC <- predict(model_RF_cptac_19, 
+                                      newdata = miR_CPTAC_rpm_qn, type = "prob")
+pred_CPTAC$d2ndProb <- apply(pred_CPTAC, 1, diffSecond)
+pred_CPTAC$CMS.cptac19 <- predict(model_RF_cptac_19, newdata = miR_CPTAC_rpm_qn, type = "raw")
+pred_CPTAC$sample_id <- rownames(miR_CPTAC_rpm_qn)
+pred_CPTAC$mRNA.CMS <- clinSupp.cptac$CMS[match(pred_CPTAC$sample_id, 
+                                                     gsub("-",".",clinSupp.cptac$sample.label))]
+pred_CPTAC$CMS.cptac20.conf <- pred_CPTAC$CMS.cptac20
+pred_CPTAC$CMS.cptac20.conf[which(pred_CPTAC$d2ndProb < 
+                                        quantile(pred_CPTAC$d2ndProb, 0.25))] <- NA
+confusionMatrix(factor(pred_CPTAC$mRNA.CMS), pred_CPTAC$CMS.cptac20.conf)
+
+##make subset with higher coverage samples
+pred_CPTAC_sub <- predict(model_RF_cptac_19, 
+                                      newdata = miR_CPTAC_rpm_qn[higherCPTAC,], type = "prob")
+pred_CPTAC_sub$d2ndProb <- apply(pred_CPTAC_sub, 1, diffSecond)
+pred_CPTAC_sub$CMS.cptac20 <- predict(model_RF_cptac_20, 
+                                      newdata = miR_CPTAC_rpm_qn[higherCPTAC,], type = "raw")
+#pred_CPTAC_sub$CMS.cptac20[which(pred_CPTAC_sub$d2ndProb < 0.01)] <- NA
+
+pred_CPTAC_sub$sample_id <- rownames(miR_CPTAC_rpm_qn[higherCPTAC,])
+pred_CPTAC_sub$mRNA.CMS <- clinSupp.cptac$CMS[match(pred_CPTAC_sub$sample_id, 
+                                                     gsub("-",".",clinSupp.cptac$sample.label))]
+
+confusionMatrix(factor(pred_CPTAC_sub$mRNA.CMS), pred_CPTAC_sub$CMS.cptac20)
+
+
+```
+
+
+```{r}
+
+### run classifier on FFPE samples for mRNA CMS and miRNAs (GSE29623)
+library(biomaRt)
+library(EnsDb.Hsapiens.v86)
+geneDBEns86 <- EnsDb.Hsapiens.v86
+
+old_mart <- useMart(biomart="ENSEMBL_MART_ENSEMBL",
+                    host="grch37.ensembl.org",
+                    path="/biomart/martservice",
+                    dataset="hsapiens_gene_ensembl")
+
+
+#### prepare mRNA data ####
+clin.29623.rna <- t(read.table("/Users/ronjaadam/projects/miRNA_mCRC/CMS-miRaCl/Data/GSE29623_FFPE_array_mRNA_miRNA/GSE29621_series_matrix_clinical.txt", sep="\t", as.is = T, skip = 1, row.names = 1))
+
+expr.arr <- read.table("/Users/ronjaadam/projects/miRNA_mCRC/CMS-miRaCl/Data/GSE29623_FFPE_array_mRNA_miRNA/GSE29621_series_matrix_expression.txt", sep="\t", as.is = T, skip = 1)
+colnames(expr.arr) <- read.table("/Users/ronjaadam/projects/miRNA_mCRC/CMS-miRaCl/Data/GSE29623_FFPE_array_mRNA_miRNA/GSE29621_series_matrix_expression.txt", sep="\t", as.is = T)[1,]
+rownames(expr.arr) <- expr.arr$ID_REF
+expr.arr <- expr.arr[,-1]
+
+safN <- getBM(attributes=c('refseq_mrna',
+                          'ensembl_gene_id',
+                          'gene_biotype', 
+                          'entrezgene_id', 
+                          'affy_hg_u133_plus_2'),
+             filters = 'affy_hg_u133_plus_2',
+             values = rownames(expr.arr),
+             mart = old_mart)
+
+rownames(expr.arr) <- make.names(safN$entrezgene_id[match(rownames(expr.arr),
+                                               safN$affy_hg_u133_plus_2)], unique=T)
+rownames(expr.arr) <- sub("X", "",rownames(expr.arr))
+
+expr.arr.CMS <- CMSclassifier::classifyCMS(expr.arr, method = "RF")
+summary(factor(expr.arr.CMS$predictedCMS$RF))/65
+
+
+### prepare miR data ####
+clin.29623.mir <- t(read.table("/Users/ronjaadam/projects/miRNA_mCRC/CMS-miRaCl/Data/GSE29623_FFPE_array_mRNA_miRNA/GSE29622_series_matrix_clinical.txt", sep="\t", as.is = T, skip=1,row.names=1))
+##check that order of samples is same in RNA and miR
+clin.29623.mir[,"Sample_characteristics_ch1_oldRef"]==clin.29623.rna[,"Sample_characteristics_ch1"]
+##clinical characteristics
+summary(factor(clin.29623.mir[,"Sample_characteristics_ch1_gender"]))/65
+summary(factor(clin.29623.mir[,"Sample_characteristics_ch1_AJCC"]))/65
+
+miR.arr <- read.table("/Users/ronjaadam/projects/miRNA_mCRC/CMS-miRaCl/Data/GSE29623_FFPE_array_mRNA_miRNA/GSE29622_series_matrix_expression.txt", sep="\t", as.is = T, skip = 1)
+colnames(miR.arr) <- read.table("/Users/ronjaadam/projects/miRNA_mCRC/CMS-miRaCl/Data/GSE29623_FFPE_array_mRNA_miRNA/GSE29622_series_matrix_expression.txt", sep="\t", as.is = T)[1,]
+miR.arr$ID_REF <- sub("-[0-9]+$","",miR.arr$ID_REF)
+rownames(miR.arr) <- gsub("-",".",miR.arr$ID_REF)
+rownames(miR.arr) <- gsub("miR","mir",rownames(miR.arr) )
+
+miR.arr$miRNA <- sub(".miR.",".mir.",miR.arr$ID_REF)
+miR.arr$miRNA <- sub(".let.",".let.",miR.arr$miRNA)
+miR.arr$miRcomb <- sub("-.+","",miR.arr$miRNA) 
+miR.arr$miRcomb <- sub("\\*","",miR.arr$miRcomb) 
+miR.arr$miRcomb <- sub("","",miR.arr$miRcomb) 
+miR.arr <- miR.arr[rowMeans(miR.arr[,grep("GSM", colnames(miR.arr))])>0,]
+
+miR.arr_comb <- as.data.frame(miR.arr %>% dplyr::group_by(miRcomb) %>% 
+                              dplyr::summarise_if(.predicate = function(x) is.numeric(x),
+                                                  .funs = mean))
+rownames(miR.arr_comb) <- miR.arr_comb$miRcomb
+
+miR.arr.scaled <- as.data.frame(scale(t(miR.arr_comb[,grep("GSM", colnames(miR.arr_comb))])))
+miR.arr.scaled.full <- miR.arr.scaled
+
+miR.arr.scaled$CMS <- expr.arr.CMS$predictedCMS$RF
+
+miR.arr.scaled <- miR.arr.scaled[which(!is.na(miR.arr.scaled$CMS)),]
+###train miRaCl-20 on scaled miR FFPE data 
+
+
+```
+
+```{r}
+###other datset for array data
+install.packages("CustomCDF")
+expr.arr.35834 <- read.table("/Users/ronjaadam/projects/miRNA_mCRC/CMS-miRaCl/Data/GSE35834_CRC_mRNA_miRNA/GSE35834-GPL15236_series_matrix_expression.txt", sep="\t", as.is = T)
+rownames(expr.arr.35834) <- sub("_at", "", rownames(expr.arr.35834) )
+clin.35834 <- t(read.table("/Users/ronjaadam/projects/miRNA_mCRC/CMS-miRaCl/Data/GSE35834_CRC_mRNA_miRNA/GSE35834-GPL15236_series_matrix_clinical.txt", skip=31))
+clin.35834[1,] <- sub("!","",clin.35834[1,])
+colnames(clin.35834) <- clin.35834[1,]
+clin.35834 <- data.frame(clin.35834[-1,])
+
+getBM( "ensembl_gene_id", 
+       "affy_huex_1_0_st_v2", "33800", old_mart)
+
+safM <- getBM(attributes=c('refseq_mrna',
+                          'ensembl_gene_id',
+                          'gene_biotype', 
+                          'entrezgene_id'),
+             filters = 'entrezgene_id',
+             values = rownames(expr.arr.35834),
+             mart = old_mart)
+
+rownames(expr.arr.35834) <- make.names(safM$entrezgene_id[match(rownames(expr.arr.35834),
+                                               safM$affy_huex_1_0_st_v2)], unique=T)
+rownames(expr.arr.35834) <- sub("X", "",rownames(expr.arr.35834))
+
+expr.arr.35834.CMS <- CMSclassifier::classifyCMS(expr.arr.35834[,
+                                                                grep("t",clin.35834$Sample_title)],
+                                                 method = "RF")
+summary(factor(expr.arr.35834.CMS$predictedCMS$RF))
+clin.35834$Sample_geo_accession == colnames(expr.arr.35834)
+
+
+##### read and prepare miR data ######
+miR.35834 <- read.table("/Users/ronjaadam/projects/miRNA_mCRC/CMS-miRaCl/Data/GSE35834_CRC_mRNA_miRNA/GSE35834-GPL8786_series_matrix_expression.txt", sep="\t", as.is = T)
+miR.clin.35834 <- t(read.table("/Users/ronjaadam/projects/miRNA_mCRC/CMS-miRaCl/Data/GSE35834_CRC_mRNA_miRNA/GSE35834-GPL8786_series_matrix_clinical.txt", sep="\t", as.is = T, skip = 31))
+miR.clin.35834[1,] <- sub("!","",miR.clin.35834[1,])
+colnames(miR.clin.35834) <- miR.clin.35834[1,]
+miR.clin.35834 <- data.frame(miR.clin.35834[-1,])
+summary(miR.clin.35834$Sample_characteristics_ch1[grep("t$", miR.clin.35834$Sample_title)])/31
+summary(as.numeric(sub("age: ","",miR.clin.35834$Sample_characteristics_ch1.3[grep("t$", miR.clin.35834$Sample_title)])))
+summary()
+
+miR.clin.35834$Sample_geo_accession == colnames(miR.35834[,grep("GSM",colnames(miR.35834))])
+sub("mirna","exon",miR.clin.35834$Sample_title) %in% clin.35834$Sample_title ## not the same order between
+
+### prepare miR dataset 
+miR.35834 <- miR.35834[grep("hsa", rownames(miR.35834)),]
+rownames(miR.35834) <- sub("_st$","",rownames(miR.35834))
+# rownames(miR.35834) <- gsub("-",".",rownames(miR.35834))
+# rownames(miR.35834) <- gsub("miR","mir",rownames(miR.35834) )
+miR.35834$miRNA <- sub(".miR.",".mir.",rownames(miR.35834))
+miR.35834$miRNA <- sub(".let.",".let.",miR.35834$miRNA)
+miR.35834$miRcomb <- sub("\\-star","",miR.35834$miRcomb) 
+miR.35834$miRcomb <- sub("-.+","",miR.35834$miRNA) 
+miR.35834_comb <- as.data.frame(miR.35834 %>% dplyr::group_by(miRcomb) %>% 
+                              dplyr::summarise_if(.predicate = function(x) is.numeric(x),
+                                                  .funs = sum))
+rownames(miR.35834_comb) <- miR.35834_comb$miRcomb
+miR.35834_comb$miRcomb <- NULL
+## scale data and get right direction for prediction
+miR.35834.scaled <- as.data.frame(scale(t(miR.35834_comb[,grep("t$", miR.clin.35834$Sample_title)])))
+
+
+## predict CMS from miRNA data
+pred_sc_gse35834 <- predict(model_RF_20_best_ffpe, #model_RF_best_ffpe,#
+                                    newdata = miR.35834.scaled, type = "prob")
+pred_sc_gse35834$d2ndProb <- apply(pred_sc_gse35834, 1, diffSecond)
+pred_sc_gse35834$CMS_20 <- predict(model_RF_20_best_ffpe, #model_RF_best_ffpe,#
+                                 newdata = miR.35834.scaled, type = "raw")
+# pred_sc_gse35834$CMS_20[which(pred_sc_gse35834$d2ndProb <
+#                               quantile(pred_sc_gse35834$d2ndProb, 0.25)  )] <- NA
+pred_sc_gse35834$CMS.mRNA <- expr.arr.35834.CMS$predictedCMS$RF[
+  match( miR.clin.35834$Sample_title[
+    grep("t$", miR.clin.35834$Sample_title)],
+    sub("exon","mirna",
+        clin.35834$Sample_title[
+    grep("t$", clin.35834$Sample_title)] ))]
+colnames(pred_sc_gse35834) <- c("RF.CMS1.posteriorProb" ,"RF.CMS2.posteriorProb"
+                                ,"RF.CMS3.posteriorProb" ,"RF.CMS4.posteriorProb", "d2ndProb",
+                                "RF.nearestCMS", "CMS.mRNA")
+pred_sc_gse35834$Sample.ID <- sub("mirna-", "",
+                                  miR.clin.35834$Sample_title[grep("t$", 
+                                                                   miR.clin.35834$Sample_title)] )
+pred_sc_gse35834$source <- "miRaCl20"
+confusionMatrix(factor(pred_sc_gse35834$RF.nearestCMS), factor(pred_sc_gse35834$CMS.mRNA))
+rownames(importances_df_arr_nzv[1:20,])
+
+###make a dataframe to compare posterior probabilities
+pred_prob_comb <- data.frame(expr.arr.35834.CMS$RF.details[,1:4], 
+                             "source"="mRNA")
+pred_prob_comb$Sample.ID <- sub("exon-","",clin.35834$Sample_title[grep("t",
+                                                                        clin.35834$Sample_title)])
+pred_prob_comb <- rbind(pred_prob_comb, 
+                       pred_sc_gse35834[,c(1:4, 8, 9)] )
+pred_prob_comb <- pivot_longer(pred_prob_comb, 
+                               cols = c(paste0("RF.CMS", 1:4, ".posteriorProb" )),
+                                names_to = "CMS", 
+                               values_to = "prob")
+pred_prob_comb <- pivot_wider(pred_prob_comb[,c("Sample.ID","CMS", "source","prob")], 
+                   id_cols = c("Sample.ID", "CMS"),
+                             names_from = c("source"),
+                             values_from = c("prob"))
+pred_prob_comb$CMS <- sub(".posteriorProb","",sub("RF.","",pred_prob_comb$CMS))
+
+ggplot(pred_prob_comb, aes(x=mRNA, y=miRaCl20, color=CMS, fill=CMS) ) + 
+  geom_point()+
+  facet_grid(factor(pred_prob_comb$CMS)) +
+  scale_colour_manual(values=paletteCMSn, name="CMS") +
+  scale_fill_manual(values=paletteCMSn, name="CMS") +
+  theme_minimal() +
+  geom_smooth(method = "lm", show.legend = F) +
+  stat_cor() 
+ggsave(paste0(plotDir, "35834_correlation_miRaClpred.pdf"),
+       width=5, height=10, useDingbats=FALSE)
+
+
+### make confusion matrix plot ####
+confusionM.35834 <- confusionMatrix(factor(pred_sc_gse35834$RF.nearestCMS), factor(pred_sc_gse35834$CMS.mRNA))[["table"]]
+rownames(confusionM.35834) <- paste0("CMS", 1:4, "miR") 
+colnames(confusionM.35834) <- paste0("CMS", 1:4, "mRNA") 
+
+###  confusion matrix plot: what is the READ concordance ####
+pheatmap(log2(as.matrix(confusionM.35834)+1), 
+         cluster_rows = F,
+         cluster_cols = F, 
+         display_numbers=confusionM.35834,
+         color= brewer.pal(n = 9, name = "Blues"),
+         filename = paste0(plotDir, "Fig2_35834_miRaCl20A_confusion_heatmap.pdf")
+)
+
+### calculate accuracy: 
+calculate.accuracy(factor(pred_sc_gse35834$RF.nearestCMS), factor(pred_sc_gse35834$CMS.mRNA))
+diag(confusionM.35834)/rowSums(confusionM.35834)
+
+
+```
+
+
+
+
+```{r}
+library(scales)
+## plot CMS predictions of miRaCl-20(A) for all sets and all samples
+listCMSlabs <- list("COAD"= predict(model_RF_20_best_all,
+                                 newdata = rc_vst_limBatchRem[,grep("hsa",
+                                                                    colnames(rc_vst_limBatchRem))], 
+                                 type = "raw"), 
+                    "READ"=predict(model_RF_20_best_all,
+                                 newdata = miR_READ_vst_BR[,grep("hsa", 
+                                                                 colnames(miR_READ_vst_BR))], 
+                                 type = "raw"),
+                    "EGAS1127"=predict(model_RF_20_best_all,
+                                 newdata = VU_rc_vst[grep("primary",clinVU$sampleType),
+                                                      grep("hsa", colnames(VU_rc_vst))], 
+                                 type = "raw"),
+                    "GSE29623"=predict(model_RF_20_best_ffpe,
+                                 newdata = miR.arr.scaled.full, type = "raw"),
+                    "GSE35834"=predict(model_RF_20_best_ffpe,
+                                 newdata = miR.35834.scaled, type = "raw"))
+
+for(CMSvec in c("COAD", "READ", "EGAS1127",
+                  "GSE29623","GSE35834")) {
+  CMSvecN <- factor(listCMSlabs[[CMSvec]], 
+                    levels=c("CMS1", "CMS2", "CMS3", "CMS4", "NOLBL"),
+                    ordered = T)
+  CMSvecN[is.na(CMSvecN)] <- "NOLBL"
+  print(length(CMSvecN))
+  data.frame("CMS"=CMSvecN) %>% 
+    ggplot(aes(x = CMS, fill = CMS )) +
+    geom_bar(aes(y=(..count..)/sum(..count..))) +
+    theme_minimal() + 
+    ylim(0, 1) +
+    scale_fill_manual(values=c(paletteCMSn)) + #"#4F2776"
+    ggtitle(paste0("CMS in ", CMSvec))
+  ggsave(paste0(plotDir, "CMS_miRaCl20_output_counts_", CMSvec, "_barplots.pdf"),
+         width=3,height=3)
+}
+
+
+```
+
+
+````{r}
+#### GSE121842: miRNA from 3 patients, 3 CRC, 3 Normal colon and theres also mRNA for each
+miR42 <- read.table("/Users/ronjaadam/projects/miRNA_mCRC/CMS-miRaCl/Data/GSE121842_mRNA-miRNA/GSE121842_miRNA.All.Counts.exp.txt", colClasses = c(rep("character", 3), rep("integer", 6)), skip = 1)
+colnames(miR42) <- as.character(read.table("/Users/ronjaadam/projects/miRNA_mCRC/CMS-miRaCl/Data/GSE121842_mRNA-miRNA/GSE121842_miRNA.All.Counts.exp.txt", as.is = T )[1,])
+miR42$miRNA <- sub("-[3,5]p","",miR42$miRNAName) #ignoring the strands
+miR42$miRNA[-grep("miR-.$",miR42$miRNA)] <- sub("-.$","",miR42$miRNA[-grep("miR-.$",miR42$miRNA)])
+miRC42 <- as.data.frame(miR42 %>% dplyr::group_by(miRNA) %>% 
+                              dplyr::summarise_if(.predicate = function(x) is.numeric(x),
+                                                  .funs = sum)) #summarizing isoforms and strands
+rownames(miRC42) <- sub("miR","mir",gsub("-",".",miRC42$miRNA)) #make name format comparable
+miRC42_vst <- as.data.frame(t(DESeq2::varianceStabilizingTransformation(
+  as.matrix(miRC42[,grep("C", colnames(miRC42))])))) #vst (only cancer samples) and transpose
+View(miRC42_vst)
+
+pred_miRC42 <- predict(model_RF_best_all, newdata = miRC42_vst, type = "prob")
+pred_miRC42$CMS <- predict(model_RF_best_all, newdata = miRC42_vst, type = "raw")
+# pred_miRC42[,paste0("CMS", 1:4, ".20")] <- predict(model_RF_20_best_all, newdata = miRC42_vst, type = "prob")
+# pred_miRC42$CMS.20 <- predict(model_RF_20_best_all, newdata = miRC42_vst, type = "raw")
+
+library(devtools)
+install_github("Sage-Bionetworks/CMSclassifier")
+library(CMSclassifier)
+mRNA42 <- read.table("/Users/ronjaadam/projects/miRNA_mCRC/CMS-miRaCl/Data/GSE121842_mRNA-miRNA/GSE121842_all.counts.exp.txt", skip = 1)
+colnames(mRNA42) <- as.character(read.table("/Users/ronjaadam/projects/miRNA_mCRC/CMS-miRaCl/Data/GSE121842_mRNA-miRNA/GSE121842_all.counts.exp.txt", as.is = T )[1,])
+rownames(mRNA42) <- mRNA42$GeneID
+mRNA42_vst <- as.data.frame(DESeq2::varianceStabilizingTransformation(
+  as.matrix(mRNA42[,grep("C", colnames(mRNA42))])))
+library('org.Hs.eg.db')
+entrezIds <- mapIds(org.Hs.eg.db, keys=rownames(mRNA42), 'ENTREZID', 'SYMBOL')
+mRNA42_vst <- mRNA42_vst[-which(is.na(entrezIds)),]
+
+rownames(mRNA42_vst) <- entrezIds[-which(is.na(entrezIds))]
+CMS42 <- CMSclassifier::classifyCMS(mRNA42_vst,method="RF")
+
+
+pred_42 <- pivot_longer(CMS42$RF.details,
+                        cols = c(paste0("RF.","CMS", 1:4, ".posteriorProb")))
+pred_42$sample <- rep(rownames(CMS42$RF.details), each=4)
+pred_42$name <- sub("RF.","",sub(".posteriorProb", "", pred_42$name))
+pred_42$CMS <- factor(pred_42$name)
+pred_42[,c("name.miR", "value.miR")] <- pivot_longer(pred_miRC42[,c(paste0("CMS", 1:4))],
+                                                     cols = c(paste0("CMS", 1:4)))
+
+ggplot(pred_42, aes(x=CMS, y=value, fill=CMS, group=sample,
+                    color=sample) ) + 
+  geom_line() + geom_point(shape=21, size=4)+ 
+  scale_fill_manual(values=paletteCMSn, name="CMS") +
+  scale_color_manual(values = c("black", "azure2", "azure3"))+
+  theme_minimal() 
+ggsave(paste0(plotDir, "GSE121842_mRNApostprob.pdf"),
+       width=4, height=4, useDingbats=FALSE)
+ggplot(pred_42, aes(x=CMS, y=value.miR, fill=CMS, group=sample, 
+                    color=sample) ) + 
+  geom_line() + geom_point(shape=21, size=4)+ 
+  scale_fill_manual(values=paletteCMSn, name="CMS") +
+  scale_color_manual(values = c("black", "azure2", "azure3"))+
+  theme_minimal() 
+ggsave(paste0(plotDir, "GSE121842_miRaClpostprob.pdf"),
+       width=4, height=4, useDingbats=FALSE)
+
+
+```

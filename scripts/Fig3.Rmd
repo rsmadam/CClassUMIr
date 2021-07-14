@@ -49,6 +49,17 @@ ggplot( rc_vst_BR, aes_string( x=i) ) +
 ggsave(paste0(plotDir,"Fig3_density_", i, ".pdf"))
 }
 
+VU_valid$CMS <- pred_rc_vst_VU_RF$CMS
+ggplot( VU_valid, aes_string(x="hsa.mir.218") ) + 
+  geom_density( aes( group=CMS, colour=CMS, fill=CMS ), alpha=0.3 ) +
+  scale_fill_manual( values = paletteCMSn ) +
+  scale_color_manual( values = paletteCMSn ) +
+  theme_minimal( ) +
+  theme(axis.text=element_text(size=20),
+        axis.title=element_text(size=25),
+        legend.position="none")
+ggsave(paste0(plotDir,"VU_density_hsa.mir.218.pdf"))
+
 ```
 
 

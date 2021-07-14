@@ -169,12 +169,14 @@ wideREAD$d2ndProb_20 <- pred_read_RF$d2ndProb_20[selREAD]
 ggplot(wideREAD, aes(CMS.miR, d2ndProb) ) + 
   geom_boxplot(aes(group = CMS.miR, fill=factor(CMS.miR))) +
   scale_fill_manual(values=paletteCMS, name="CMS") +
+  stat_compare_means()+ # Add mean comparisons p-value
   theme_minimal()
 ggsave(paste0(plotDir, "Fig2d_READ_best-RF-all_confidence_d2ndProb_boxplot.pdf"),
        useDingbats=FALSE)
 ggplot(wideREAD, aes(CMS.miR_RF_20, d2ndProb_20) ) + 
   geom_boxplot(aes(group = CMS.miR_RF_20, fill=factor(CMS.miR_RF_20))) +
   scale_fill_manual(values=paletteCMS, name="CMS") +
+  stat_compare_means()+ # Add mean comparisons p-value
   theme_minimal()
 ggsave(paste0(plotDir, "Fig2d_READ_best-RF-20-all_confidence_d2ndProb_boxplot.pdf"),
        useDingbats=FALSE)
@@ -223,7 +225,7 @@ pred_VU_RF$CMS_20 <- predict(model_RF_20_best_all,
                                  newdata = VU_valid, type = "raw")
 summary(pred_VU_RF$CMS_20)
 summary(pred_VU_RF$CMS)
-pred_VU_RF$SampleID <- VU_rc_vst$Sample.ID 
+pred_VU_RF$SampleID <- VU_rc_vst$Sample.ID[grep("primary",clinVU$sampleType)]
 
 #potentially subset
 pred_VU_RF <- pred_VU_RF[grep("primary",clinVU$sampleType),]
@@ -266,9 +268,10 @@ wideVU$d2ndProb <- pred_VU_RF$d2ndProb
 wideVU$d2ndProb_20 <- pred_VU_RF$d2ndProb_20
 
 #### confidence boxplots ####
-ggplot(wideVU, aes(CMS.miR, d2ndProb) ) + 
-  geom_boxplot(aes(group = CMS.miR, fill=factor(CMS.miR))) +
+ggplot(wideVU, aes(CMS.miR_RF_20, d2ndProb) ) + 
+  geom_boxplot(aes(group = CMS.miR_RF_20, fill=factor(CMS.miR_RF_20))) +
   scale_fill_manual(values=paletteCMS, name="CMS") +
+    stat_compare_means()+ # Add mean comparisons p-value
   theme_minimal()
 ggsave(paste0(plotDir, "Fig2d_VU-primary_best-RF-all_confidence_d2ndProb_boxplot.pdf")
        , useDingbats=FALSE)
