@@ -35,6 +35,8 @@ pred_COAD_test$CMS <- predict(model_RF_best_all, newdata = rc_vst_BR_test, type 
 pred_COAD_test$CMS_20 <- predict(model_RF_20_best_all, newdata = rc_vst_BR_test, type = "raw")
 rownames(pred_COAD_test) <- rownames(rc_vst_limBatchRem)[-which(rownames(rc_vst_limBatchRem) %in%
                                                                   rownames(rc_vst_BR))]
+write.csv2(pred_COAD_test, row.names = T, 
+            "/Users/ronjaadam/projects/miRNA_mCRC/CMS-miRaCl/analyses/tables/pred_COAD_test_nontraining-samples.csv")
 
 
 
@@ -452,7 +454,11 @@ safN <- getBM(attributes=c('refseq_mrna',
 rownames(expr.arr) <- make.names(safN$entrezgene_id[match(rownames(expr.arr),
                                                safN$affy_hg_u133_plus_2)], unique=T)
 rownames(expr.arr) <- sub("X", "",rownames(expr.arr))
+expr.arr <- expr.arr[-grep("^NA", rownames(expr.arr)), ]
+expr.arr <- expr.arr[-grep("\\.", rownames(expr.arr)), ]
 
+
+library(CMSclassifier)
 expr.arr.CMS <- CMSclassifier::classifyCMS(expr.arr, method = "RF")
 summary(factor(expr.arr.CMS$predictedCMS$RF))/65
 
@@ -478,6 +484,7 @@ miR.arr$miRcomb <- sub("\\*","",miR.arr$miRcomb)
 miR.arr$miRcomb <- sub("","",miR.arr$miRcomb) 
 miR.arr <- miR.arr[rowMeans(miR.arr[,grep("GSM", colnames(miR.arr))])>0,]
 
+library(dplyr)
 miR.arr_comb <- as.data.frame(miR.arr %>% dplyr::group_by(miRcomb) %>% 
                               dplyr::summarise_if(.predicate = function(x) is.numeric(x),
                                                   .funs = mean))
@@ -486,9 +493,9 @@ rownames(miR.arr_comb) <- miR.arr_comb$miRcomb
 miR.arr.scaled <- as.data.frame(scale(t(miR.arr_comb[,grep("GSM", colnames(miR.arr_comb))])))
 miR.arr.scaled.full <- miR.arr.scaled
 
-miR.arr.scaled$CMS <- expr.arr.CMS$predictedCMS$RF
+miR.arr.scaled.full$CMS <- expr.arr.CMS$predictedCMS$RF
 
-miR.arr.scaled <- miR.arr.scaled[which(!is.na(miR.arr.scaled$CMS)),]
+miR.arr.scaled <- miR.arr.scaled.full[which(!is.na(miR.arr.scaled.full$CMS)),]
 ###train miRaCl-20 on scaled miR FFPE data 
 
 
@@ -496,7 +503,7 @@ miR.arr.scaled <- miR.arr.scaled[which(!is.na(miR.arr.scaled$CMS)),]
 
 ```{r}
 ###other datset for array data
-install.packages("CustomCDF")
+#install.packages("CustomCDF")
 expr.arr.35834 <- read.table("/Users/ronjaadam/projects/miRNA_mCRC/CMS-miRaCl/Data/GSE35834_CRC_mRNA_miRNA/GSE35834-GPL15236_series_matrix_expression.txt", sep="\t", as.is = T)
 rownames(expr.arr.35834) <- sub("_at", "", rownames(expr.arr.35834) )
 clin.35834 <- t(read.table("/Users/ronjaadam/projects/miRNA_mCRC/CMS-miRaCl/Data/GSE35834_CRC_mRNA_miRNA/GSE35834-GPL15236_series_matrix_clinical.txt", skip=31))
@@ -504,24 +511,10 @@ clin.35834[1,] <- sub("!","",clin.35834[1,])
 colnames(clin.35834) <- clin.35834[1,]
 clin.35834 <- data.frame(clin.35834[-1,])
 
-getBM( "ensembl_gene_id", 
-       "affy_huex_1_0_st_v2", "33800", old_mart)
-
-safM <- getBM(attributes=c('refseq_mrna',
-                          'ensembl_gene_id',
-                          'gene_biotype', 
-                          'entrezgene_id'),
-             filters = 'entrezgene_id',
-             values = rownames(expr.arr.35834),
-             mart = old_mart)
-
-rownames(expr.arr.35834) <- make.names(safM$entrezgene_id[match(rownames(expr.arr.35834),
-                                               safM$affy_huex_1_0_st_v2)], unique=T)
-rownames(expr.arr.35834) <- sub("X", "",rownames(expr.arr.35834))
-
+## create CMS labels (rownames are already entrez ids in this set)
 expr.arr.35834.CMS <- CMSclassifier::classifyCMS(expr.arr.35834[,
-                                                                grep("t",clin.35834$Sample_title)],
-                                                 method = "RF")
+grep("t",clin.35834$Sample_title)], method = "RF")
+
 summary(factor(expr.arr.35834.CMS$predictedCMS$RF))
 clin.35834$Sample_geo_accession == colnames(expr.arr.35834)
 
@@ -534,7 +527,7 @@ colnames(miR.clin.35834) <- miR.clin.35834[1,]
 miR.clin.35834 <- data.frame(miR.clin.35834[-1,])
 summary(miR.clin.35834$Sample_characteristics_ch1[grep("t$", miR.clin.35834$Sample_title)])/31
 summary(as.numeric(sub("age: ","",miR.clin.35834$Sample_characteristics_ch1.3[grep("t$", miR.clin.35834$Sample_title)])))
-summary()
+
 
 miR.clin.35834$Sample_geo_accession == colnames(miR.35834[,grep("GSM",colnames(miR.35834))])
 sub("mirna","exon",miR.clin.35834$Sample_title) %in% clin.35834$Sample_title ## not the same order between
@@ -546,8 +539,8 @@ rownames(miR.35834) <- sub("_st$","",rownames(miR.35834))
 # rownames(miR.35834) <- gsub("miR","mir",rownames(miR.35834) )
 miR.35834$miRNA <- sub(".miR.",".mir.",rownames(miR.35834))
 miR.35834$miRNA <- sub(".let.",".let.",miR.35834$miRNA)
-miR.35834$miRcomb <- sub("\\-star","",miR.35834$miRcomb) 
 miR.35834$miRcomb <- sub("-.+","",miR.35834$miRNA) 
+miR.35834$miRcomb <- sub("\\-star","",miR.35834$miRcomb) 
 miR.35834_comb <- as.data.frame(miR.35834 %>% dplyr::group_by(miRcomb) %>% 
                               dplyr::summarise_if(.predicate = function(x) is.numeric(x),
                                                   .funs = sum))
@@ -578,8 +571,17 @@ pred_sc_gse35834$Sample.ID <- sub("mirna-", "",
                                   miR.clin.35834$Sample_title[grep("t$", 
                                                                    miR.clin.35834$Sample_title)] )
 pred_sc_gse35834$source <- "miRaCl20"
-confusionMatrix(factor(pred_sc_gse35834$RF.nearestCMS), factor(pred_sc_gse35834$CMS.mRNA))
+pred_sc_gse35834$CMS.mRNA[is.na(pred_sc_gse35834$CMS.mRNA)] <- "NA"
+confusionMatrix(factor(pred_sc_gse35834$RF.nearestCMS, 
+                       levels=c(paste0("CMS", 1:4), "NA")), 
+                factor(pred_sc_gse35834$CMS.mRNA))
 rownames(importances_df_arr_nzv[1:20,])
+
+confusionMatrix(factor(pred_sc_gse35834$RF.nearestCMS[grep("CMS",
+                                                    pred_sc_gse35834$CMS.mRNA)], 
+                       levels=c(paste0("CMS", 1:4))), 
+                factor(pred_sc_gse35834$CMS.mRNA[grep("CMS",
+                                                    pred_sc_gse35834$CMS.mRNA)]))
 
 ###make a dataframe to compare posterior probabilities
 pred_prob_comb <- data.frame(expr.arr.35834.CMS$RF.details[,1:4], 

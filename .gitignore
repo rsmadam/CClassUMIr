@@ -5,6 +5,7 @@
 /analyses/
 /scripts/Data/
 /scripts/GDCdata/
+/scripts/*.html
 CMS-miRaCl.Rproj
 .Rproj.user/
 /test/

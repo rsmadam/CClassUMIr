@@ -1,0 +1,622 @@
+---
+title: "Rebuttal3"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r}
+library(tidyverse)
+library(rstatix)
+library(ggpubr)
+
+### comparison prediction results to mRNA based CMS
+### include NAs into confusion matrix
+levels(pred_read_RF$CMS) <- c(paste0("CMS", 1:4), "NA")
+levels(pred_read_RF$CMS_20) <- c(paste0("CMS", 1:4), "NA")
+miR_READ_vst_BR$CMS.na <- as.character(miR_READ_vst_BR$CMS.lv)
+miR_READ_vst_BR$CMS.na[is.na(miR_READ_vst_BR$CMS.na)] <- "NA"
+miR_READ_vst_BR$CMS.na <- as.factor(miR_READ_vst_BR$CMS.na)
+
+pred_read_RF$CMS.lv <- miR_READ_vst_BR$CMS.na[selREAD]
+
+confusionMatrix(pred_read_RF$CMS, factor(miR_READ_vst_BR$CMS.na[selREAD]))[['table']]
+confusionMatrix(pred_read_RF$CMS_20, factor(miR_READ_vst_BR$CMS.na[selREAD]))[['table']]
+
+
+#### are the purities different in swapping samples CMS2/CMS4? 
+df.pur <- data.frame( "value"=c( purity.ABS.read$purity[match(
+                             pred_read_RF$Sample.ID[
+                               which(pred_read_RF$CMS==
+                                       pred_read_RF$CMS.lv & 
+                                       pred_read_RF$CMS %in% 
+                                       c("CMS2")) ], 
+                             purity.ABS.read$TCGA.patID)],
+                             purity.ABS.read$purity[match(pred_read_RF$Sample.ID[
+                               which(pred_read_RF$CMS==
+                                       pred_read_RF$CMS.lv & 
+                                       pred_read_RF$CMS %in% 
+                                       c("CMS4")) ],
+                             purity.ABS.read$TCGA.patID)],
+## mRNA CMS4, miRNA CMS2: 
+purity.ABS.read$purity[match(pred_read_RF$Sample.ID[
+                               which(pred_read_RF$CMS %in% 
+                                       c("CMS2") & 
+                                       pred_read_RF$CMS.lv %in% 
+                                       c("CMS4")) ],
+                             purity.ABS.read$TCGA.patID)],
+## mRNA CMS2, miRNA CMS4: 
+purity.ABS.read$purity[match(pred_read_RF$Sample.ID[
+                               which(pred_read_RF$CMS %in% 
+                                       c("CMS4") & 
+                                       pred_read_RF$CMS.lv %in% 
+                                       c("CMS2")) ], 
+                               purity.ABS.read$TCGA.patID)]))
+df.pur$purity <- rep(c("CMS2=2", "CMS4=4", "CMS4to2", "CMS2to4"),
+                      times=c(54, 24, 8, 16)) ##miRacl CMS predictions
+df.pur$purity <- rep(c("CMS2=2", "CMS4=4", "CMS4to2", "CMS2to4"),
+                      times=c(50, 22, 10, 16)) ##CMS_20 miRaCl-20 predictions
+df.pur$CMS.group <- sub("to.","", sub("=.*", "", df.pur$purity) )
+
+stat.test <- df.pur %>% wilcox_test(value ~ purity)
+stat.test <- df.pur %>% t_test(value ~ purity)
+stat.test <- stat.test %>% add_xy_position(x = "purity")
+
+# Change plot type to violin
+ggplot(df.pur, aes(x=purity, y=value, color=CMS.group)) + 
+  geom_violin(trim=FALSE, draw_quantiles = T) + 
+  geom_boxplot(width=0.2) +
+  geom_jitter(width = 0.1, size=0.5, alpha=0.6) + 
+  theme_minimal(base_size = 18) +
+  scale_colour_manual(values=paletteCMSn, name="CMS.mRNA") +
+  #stat_compare_means( label = "p.signif" ) +
+  stat_pvalue_manual(stat.test, label = "p.adj.signif", tip.length = 0.01,
+                     size=5)
+ggsave(paste0(projHome, "CMS-miRaCl/analyses/plots/READ_purities_violin_miRaCl.pdf"),
+       useDingbats=F, height=5, width=7)
+
+
+```
+
+
+
+```{r}
+
+######### make alluvial plot for the COAD samples not considered for training
+
+# goldst.CMS.COAD <- data.frame("LV.table"=CMS_samples$CMS_final_netw_RF[
+#   match(rownames(CMScoad.rf$predictedCMS),                                                         CMS_samples$SampleId.)],
+#                 CMScoad.rf$predictedCMS,
+#                 CMScoad.ss$predictedCMS, 
+#                 CMScoad.rf$nearestCMS, 
+#   CMScoad.rf$RF.details)
+# write.csv2(goldst.CMS.COAD, paste0(projHome, "CMS-miRaCl/Data/TCGA-COAD-allRNA-01Aonly_CMS-labels_near.csv"))
+
+goldst.CMS.COAD <- read.csv2(paste0(projHome, "CMS-miRaCl/Data/TCGA-COAD-allRNA-01Aonly_CMS-labels_near.csv"),
+                              row.names = 1)
+
+labelsCMS.COAD.mirdata <- miR_COAD_vst[,c("CMS.lv", 
+                                          "CMS.guin" , "CMS.cl.rf")]
+labelsCMS.COAD.mirdata$CMS.near <- 
+  goldst.CMS.COAD$RF.1[match(gsub("-",".",
+                                    rownames(labelsCMS.COAD.mirdata)),
+                               rownames(goldst.CMS.COAD))]
+rownames.COAD.mir <- rownames(labelsCMS.COAD.mirdata)
+rows.COAD.mir.nontrain <- which(!rownames(labelsCMS.COAD.mirdata) %in% 
+                                              rownames(rc_vst_BR))
+labelsCMS.COAD.mirdata <- apply(labelsCMS.COAD.mirdata, 2, as.character)
+labelsCMS.COAD.mirdata <- as.data.frame(apply(labelsCMS.COAD.mirdata, 2, function(x){paste0(x, "")}))
+rownames(labelsCMS.COAD.mirdata) <- rownames.COAD.mir
+labelsCMS.COAD.mirdata$CMS.near <- sub(",.*", "", 
+                                       labelsCMS.COAD.mirdata$CMS.near ) 
+#one samples was assigned 2 classes: ignore
+
+pred_COAD_test <- read.csv2("/Users/ronjaadam/projects/miRNA_mCRC/CMS-miRaCl/analyses/tables/pred_COAD_test_nontraining-samples.csv", row.names = 1)
+
+labelsCMS.COAD.mir.nontrain <- labelsCMS.COAD.mirdata[rows.COAD.mir.nontrain,]
+labelsCMS.COAD.mir.nontrain$CMS.miR <- as.character(pred_COAD_test$CMS[match(
+  rownames(labelsCMS.COAD.mir.nontrain), rownames(pred_COAD_test)
+)])
+
+summary(labelsCMS.COAD.mir.nontrain$CMS.miR == labelsCMS.COAD.mir.nontrain$CMS.cl.rf)
+
+##consider the confidence censoring
+pred_COAD_test$d2ndProb <- apply(pred_COAD_test[1:4], 1, diffSecond)
+pred_COAD_test$d2ndClass <- apply(pred_COAD_test[,1:4], 1, theSecond)
+selConfid <- which(pred_COAD_test$d2ndProb < quantile(pred_COAD_test$d2ndProb, prob=.25))
+pred_COAD_test$conf.miR.CMS <- pred_COAD_test$CMS
+pred_COAD_test$conf.miR.CMS[selConfid] <- "NA"
+  
+labelsCMS.COAD.mir.nontrain[,colnames(pred_COAD_test)] <- pred_COAD_test[match(
+  rownames(labelsCMS.COAD.mir.nontrain), rownames(pred_COAD_test)
+), ]
+labelsCMS.COAD.mir.nontrain <- labelsCMS.COAD.mir.nontrain[-which(labelsCMS.COAD.mir.nontrain$CMS.near=="NA"),] ##exclude secondary samples from same patients
+
+
+### plot the concordance within mRNA sample labels #####
+library("ggalluvial")
+paletteCMSn=c("CMS1" ="#E79E1B", 
+              "CMS2"= "#0071B1", 
+              "CMS3"= "#C45597",#Guinney:"#C977A4", 
+              "CMS4"="#009C74",
+              "NA"="#d3d3d3",
+              "NOMATCH"="#999999")
+
+ggplot(as.data.frame(labelsCMS.COAD.mir.nontrain),
+       aes(axis1 = CMS.near,
+           axis2=CMS.miR)) +
+  geom_alluvium(aes(fill = CMS.miR), width = 1/12) +
+  geom_stratum(width = 1/12, fill = rev(c(rep(paletteCMSn[1:4],2)
+                                          )), 
+                                        color = "grey") +
+  scale_x_discrete(limits = c(#"CMS.guin", 
+                              "CMS.near", 
+                              "CMS.miR"#, 
+                              #"conf.CMS.miR"
+                              ), 
+                   expand = c(.05, .05)) +
+  scale_fill_manual(values = paletteCMSn) +
+  theme_minimal() + 
+  ggtitle("nontraining set COAD CMS")
+ggsave(paste0(projHome, "CMS-miRaCl/analyses/plots/COAD_alluvial_non-train_nearest_miRaCl.pdf"), 
+              height=6, width=4)
+
+calculate.accuracy(factor(labelsCMS.COAD.mir.nontrain$CMS.near[-which(labelsCMS.COAD.mir.nontrain$CMS.near=="NA")]), factor(labelsCMS.COAD.mir.nontrain$CMS.miR[-which(labelsCMS.COAD.mir.nontrain$CMS.near=="NA")]))
+##Overall Accuracy: 0.5621302
+
+##accuracy excluding low-confidence
+calculate.accuracy(factor(labelsCMS.COAD.mir.nontrain$CMS.near[-which(labelsCMS.COAD.mir.nontrain$CMS.near=="NA")]), factor(labelsCMS.COAD.mir.nontrain$conf.miR.CMS[-which(labelsCMS.COAD.mir.nontrain$CMS.near=="NA")]))
+##Overall Accuracy: 0.616
+
+###clinical data COAD test set 
+summary(as.factor(clinical.coad$gender[
+  match(rownames(labelsCMS.COAD.mir.nontrain), rownames(clinical.crc))]))/169*100
+summary(as.factor(sub("[A,B,C]","",clinical.coad$ajcc_pathologic_stage[
+  match(rownames(labelsCMS.COAD.mir.nontrain), rownames(clinical.crc))]) ))/169*100
+summary(clinical.coad$age_at_diagnosis[
+  match(rownames(labelsCMS.COAD.mir.nontrain), rownames(clinical.crc))])/365
+summary(factor(labelsCMS.COAD.mir.nontrain$CMS.near))/169*100
+
+```
+
+
+```{r}
+
+#### make a correlation of the postprobs of non-training samples in COAD 
+##add mRNA postprobs
+labelsCMS.COAD.mir.nontrain[paste0("CMS", 1:4, ".mRNA") ] <- 
+  goldst.CMS.COAD[match(gsub("-",".", rownames(labelsCMS.COAD.mir.nontrain)),
+                               rownames(goldst.CMS.COAD)), 
+                    grep("CMS[1-4]", colnames( goldst.CMS.COAD ))]
+labelsCMS.COAD.mir.nontrain$Sample.ID <- rownames(labelsCMS.COAD.mir.nontrain)
+
+##add the confidence info
+labelsCMS.COAD.mir.nontrain$d2ndProb.mRNA <- apply(labelsCMS.COAD.mir.nontrain[,grep("CMS..mRNA", colnames(labelsCMS.COAD.mir.nontrain))], 1, diffSecond)
+
+##transform format
+probsCMS.COAD.nontrain <- pivot_longer(labelsCMS.COAD.mir.nontrain[!is.na(labelsCMS.COAD.mir.nontrain$CMS1.miR),
+                                                                   5:13],
+                                       cols = c(paste0("CMS", 1:4, ".mRNA"),
+                                                       paste0("CMS", 1:4, 
+                                                              ".miR")) )
+
+probsCMS.COAD.nontrain$source <- sub(".*m", "m",probsCMS.COAD.nontrain$name)
+probsCMS.COAD.nontrain$CMS <- factor(sub(".m.*","",probsCMS.COAD.nontrain$name))
+
+probsCMS.COAD.nontrain <- pivot_wider(probsCMS.COAD.nontrain[,c("Sample.ID", "source",  "CMS", "value")], 
+                   id_cols = c("Sample.ID", "CMS", "source"),
+                             names_from = c("source"),
+                             values_from = c("value"))
+##get purity values
+purity.ABS <- read.csv2(paste0(projHome, "TCGA_mastercalls.abs_tables_JSedit.fixed.txt"),
+                          sep="\t", header = T, dec=".",
+                        colClasses = c("character","character", "factor","numeric",
+                                       "numeric", "numeric", "numeric", "numeric",
+                                       "numeric", "factor"))
+purity.ABS$TCGA.patID <- sub("-01$","",purity.ABS$array)
+probsCMS.COAD.nontrain$purity <- purity.ABS$purity[
+  match(probsCMS.COAD.nontrain$Sample.ID, purity.ABS$TCGA.patID )]
+probsCMS.COAD.nontrain$purity[is.na(probsCMS.COAD.nontrain$purity)] <- median(probsCMS.COAD.nontrain$purity, na.rm = T) #rpelace NA purities by median
+
+ggplot(probsCMS.COAD.nontrain, aes(x=mRNA, y=miR, 
+                                   color=CMS, fill=CMS,
+                                   alpha=purity) ) + 
+  geom_point()+
+  facet_grid(rows = vars(CMS)) +
+  scale_colour_manual(values=paletteCMSn, name="CMS") +
+  scale_fill_manual(values=paletteCMSn, name="CMS") +
+  geom_smooth(method = "lm", show.legend = F) +
+  stat_cor(size = 5, color="black") +
+  theme_minimal(base_size = 18)
+
+ggsave(paste0(plotDir, "COAD_postprob_correlation_purity_mRNA.vs.miRaCl.pdf"),
+       width=5, height=10, useDingbats=FALSE)
+
+
+labelsCMS.COAD.mir.nontrain$purity <- purity.ABS$purity[
+  match(labelsCMS.COAD.mir.nontrain$Sample.ID, purity.ABS$TCGA.patID )]
+labelsCMS.COAD.mir.nontrain$purity[is.na(labelsCMS.COAD.mir.nontrain$purity)] <- median(labelsCMS.COAD.mir.nontrain$purity, na.rm = T) #rpelace NA purities by median
+
+ggplot(labelsCMS.COAD.mir.nontrain, aes(x=d2ndProb.mRNA, y=d2ndProb.miR, 
+                                   color=CMS, fill=CMS,
+                                   alpha=purity) ) + 
+  geom_point()+
+  facet_grid(rows = vars(CMS)) +
+  scale_colour_manual(values=paletteCMSn, name="CMS") +
+  scale_fill_manual(values=paletteCMSn, name="CMS") +
+  geom_smooth(method = "lm", show.legend = F) +
+  stat_cor(size = 5, color="black") +
+  theme_minimal(base_size = 18)
+
+ggsave(paste0(plotDir, "COAD_confidences-correlation_purity_mRNA.vs.miRaCl.pdf"),
+       width=5, height=10, useDingbats=FALSE)
+
+
+```
+
+
+
+```{r}
+
+
+
+
+######### make alluvial plot for the READ samples which were not classifiable
+## get the postProb from mRNA labels
+# write.csv2(data.frame("LV.table"=CMS_samples$CMS_final_netw_RF[match(rownames(CMSread.rf$predictedCMS),                                                        CMS_samples$SampleId)],
+#                 CMSread.rf$predictedCMS,
+#                 CMSread.rf$nearestCMS, 
+#                 CMSread.rf$RF.details), paste0(projDir,"/Data/TCGA-READ-allRNA-01Aonly_CMS-labels.nearest.csv"), 
+#           row.names = T)
+predictedCMS.READ <- read.csv2(paste0(projDir,"/Data/TCGA-READ-allRNA-01Aonly_CMS-labels.nearest.csv"), row.names = 1)
+
+labelsCMS.READ.mirdata <- predictedCMS.READ
+labelsCMS.READ.mirdata$Sample.ID <- rownames(labelsCMS.READ.mirdata)
+
+##combine with miRaCl probs and labels
+labelsCMS.READ.mir.compare <- left_join(labelsCMS.READ.mirdata, 
+                                        pred_read_RF, by= "Sample.ID")
+rownames(labelsCMS.READ.mir.compare) <- labelsCMS.READ.mir.compare$Sample.ID
+
+##which are the samples that were not used in confusion matrix of original publication:
+labelsCMS.READ.mir.noclass <- labelsCMS.READ.mir.compare[which(labelsCMS.READ.mir.compare$CMS.lv=="NA"), ]
+
+##consider the confidence censoring
+selConfid.READ <- which(labelsCMS.READ.mir.compare$d2ndProb < quantile(labelsCMS.READ.mir.compare$d2ndProb, prob=.25, na.rm=T))
+labelsCMS.READ.mir.compare$conf.miR.CMS <- labelsCMS.READ.mir.compare$CMS
+labelsCMS.READ.mir.compare$conf.miR.CMS[selConfid.READ] <- "NA"
+  
+labelsCMS.READ.mir.noclass$conf.miR.CMS <- as.character(labelsCMS.READ.mir.compare$conf.miR.CMS[match(
+  rownames(labelsCMS.READ.mir.noclass), 
+  rownames(labelsCMS.READ.mir.compare)
+)])
+
+
+### plot the concordance within mRNA sample labels #####
+library("ggalluvial")
+paletteCMSn=c("CMS1" ="#E79E1B", 
+              "CMS2"= "#0071B1", 
+              "CMS3"= "#C45597",#Guinney:"#C977A4", 
+              "CMS4"="#009C74",
+              "NA"="#d3d3d3",
+              "NOMATCH"="#999999")
+
+ggplot(as.data.frame(labelsCMS.READ.mir.noclass),
+       aes(#axis1= CMS.lv,
+           axis1 = RF.nearestCMS,
+           axis2=CMS_20, 
+           #axis4=conf.miR.CMS
+           )) +
+  geom_alluvium(aes(fill = CMS_20), width = 1/12) +
+  geom_stratum(width = 1/12, fill = rev(c(#paletteCMSn[c(1:2,4:5)],
+                                          rep(paletteCMSn[1:4],2)
+                                          #paletteCMSn[5]
+                                          )),
+                                        color = "grey") +
+  scale_x_discrete(limits = c(#"CMS.orig", 
+                              "CMS.near", 
+                              "CMS.miR"
+                              #"conf.CMS.miR"
+                              ), 
+                   expand = c(.05, .05)) +
+  scale_fill_manual(values = paletteCMSn) +
+  theme_minimal(base_size =18) + 
+  ggtitle("nonclass. set READ CMS")
+ggsave(paste0(projHome, "CMS-miRaCl/analyses/plots/READ_alluvial_nonclass_lv_nearest_miRaCl_conf.pdf"))
+
+calculate.accuracy(factor(labelsCMS.READ.mir.noclass$RF.nearestCMS), factor(labelsCMS.READ.mir.noclass$CMS))
+##35 samples, Overall Accuracy: 0.4571429
+
+##accuracy excluding low-confidence
+calculate.accuracy(factor(labelsCMS.READ.mir.noclass$RF.nearestCMS, 
+                          levels=c(paste0("CMS", 1:4))), factor(labelsCMS.READ.mir.noclass$conf.miR.CMS, levels=c(paste0("CMS", 1:4))))
+##25 samples, Overall Accuracy: 0.52
+
+```
+
+
+
+
+```{r}
+
+#### make a correlation of the postprobs in READ 
+labelsCMS.READ.mirdata <- labelsCMS.READ.mir.compare[, c(grep("CMS[1-4]",
+colnames( labelsCMS.READ.mir.compare ), value = T), "Sample.ID")]
+colnames(labelsCMS.READ.mirdata) <- c(paste0("CMS", 1:4, "mRNA"), 
+                                      paste0("CMS", 1:4, "miR"), "Sample.ID")
+labelsCMS.READ.mirdata <- pivot_longer(labelsCMS.READ.mirdata,
+                                       cols = c(paste0("CMS", 1:4, "mRNA"),
+                                                       paste0("CMS", 1:4, 
+                                                              "miR")) )
+labelsCMS.READ.mirdata$source <- sub(".*m", "m",labelsCMS.READ.mirdata$name)
+labelsCMS.READ.mirdata$CMS <- factor(sub("m.*","",labelsCMS.READ.mirdata$name))
+
+labelsCMS.READ.mirdata <- pivot_wider(labelsCMS.READ.mirdata[,c("Sample.ID", "source",  "CMS", "value")], 
+                   id_cols = c("Sample.ID", "CMS", "source"),
+                             names_from = c("source"),
+                             values_from = c("value"))
+labelsCMS.READ.mirdata$noclass <- ifelse(labelsCMS.READ.mirdata$Sample.ID %in% 
+                                           labelsCMS.READ.mir.noclass$Sample.ID, 
+                                         "noclass", "testset")
+labelsCMS.READ.mirdata$purity <- purity.ABS.read$purity[
+  match(labelsCMS.READ.mirdata$Sample.ID, purity.ABS.read$TCGA.patID )]
+labelsCMS.READ.mirdata$purity[is.na(labelsCMS.READ.mirdata$purity)] <-       
+  median(labelsCMS.READ.mirdata$purity, na.rm = T) #impute missing alphas as median
+
+ggplot(labelsCMS.READ.mirdata, aes(x=mRNA, y=miR, 
+                                   color=CMS, fill=CMS, alpha=purity) ) + 
+  geom_point()+
+  facet_grid(rows = vars(CMS),
+             cols = vars(noclass)) +
+  scale_colour_manual(values=paletteCMSn, name="CMS") +
+  scale_fill_manual(values=paletteCMSn, name="CMS") +
+  theme_minimal(base_size = 18) +
+  geom_smooth(method = "lm", show.legend = F) +
+  stat_cor(color="black", size=5) 
+
+ggsave(paste0(plotDir, "READ_postprob_correlation_mRNA.vs.miRaCl_splitnontest.pdf"),
+       width=7, height=10, useDingbats=FALSE)
+
+
+###### calculate confidence also for the mRNA predictions 
+labelsCMS.READ.mir.compare$d2ndProb.mRNA <- apply(labelsCMS.READ.mir.compare[,grep("RF.CMS", colnames(labelsCMS.READ.mir.compare))], 1, diffSecond)
+labelsCMS.READ.mir.compare$noclass <- ifelse(labelsCMS.READ.mir.compare$Sample.ID %in% 
+                                           labelsCMS.READ.mir.noclass$Sample.ID, 
+                                         "noclass", "testset")
+##include also purity information as alpha
+labelsCMS.READ.mir.compare$purity <- purity.ABS.read$purity[
+  match(labelsCMS.READ.mir.compare$Sample.ID, purity.ABS.read$TCGA.patID )]
+labelsCMS.READ.mir.compare$purity[is.na(labelsCMS.READ.mir.compare$purity)] <- median(labelsCMS.READ.mir.compare$purity, na.rm = T) #impute missing alphas as median
+labelsCMS.READ.mir.compare$CMS.plot <- factor(labelsCMS.READ.mir.compare$CMS, 
+                                              levels=paste0("CMS", 1:4))
+
+
+ggplot(labelsCMS.READ.mir.compare[!is.na(labelsCMS.READ.mir.compare$CMS),],
+       #there are 6 patients without miRNA data
+       aes(x=d2ndProb.mRNA, y=d2ndProb,
+                                   color=CMS.plot, fill=CMS.plot, 
+                                   alpha=purity) ) + 
+  geom_point( )+
+  facet_grid(rows=vars(CMS.plot), cols = vars(noclass)) +
+  scale_colour_manual(values=paletteCMSn, name="CMS") +
+  scale_fill_manual(values=paletteCMSn, name="CMS") +
+  theme_minimal(base_size = 18) +
+  geom_smooth(method = "lm", show.legend = F, na.rm = T) +
+  stat_cor(size=5, color="black") 
+
+ggsave(paste0(plotDir, "READ_confidence_correlation_mRNA.vs.miRaCl_splitnontest.pdf"),
+       width=7, height=10, useDingbats=FALSE)
+
+
+
+# Try plot of only the miRaCl-confidence
+ggplot(labelsCMS.READ.mir.compare[!is.na(labelsCMS.READ.mir.compare$CMS),], 
+       aes(x=noclass, y=d2ndProb, color=CMS,
+                                   alpha=purity)) + 
+  geom_boxplot(width=0.5, inherit.aes = T, position=position_dodge(width = 0.75)) +
+  geom_point(size=0.5, position=position_jitterdodge(jitter.width = 0.2,
+                                                     jitter.height = 0,
+                                                     dodge.width = 0.75, 
+                                                     seed = 123))+
+  #geom_violin(trim=FALSE, draw_quantiles = T, position=position_dodge(width = 0.75)) + 
+  theme_minimal(base_size = 13) +
+  stat_compare_means( label = "p.signif" ) +
+  scale_colour_manual(values=paletteCMSn, name="CMS") +
+  scale_fill_manual(values=paletteCMSn, name="CMS") 
+
+
+
+```
+
+
+
+
+
+```{r}
+
+
+##### what is the results for FFPE samples in COAD
+miR_COAD_comb <- as.data.frame(TCGAmiR.COAD %>% dplyr::group_by(miRcomb) %>%
+                                 dplyr::summarise_if(.predicate = function(x) is.numeric(x),
+                                                     .funs = mean)) #affects around 180miRNA
+
+row.names(miR_COAD_comb) <- miR_COAD_comb$miRcomb #afterwards remove column 1
+miR_COAD_comb$miRcomb <- NULL
+##keep only the FFPE sample per patient
+##checked in https://portal.gdc.cancer.gov/legacy-archive/search/f?filters=%7B%22op%22:%22and%22,%22content%22:%5B%7B%22op%22:%22in%22,%22content%22:%7B%22field%22:%22cases.project.primary_site%22,%22value%22:%5B%22Colorectal%22%5D%7D%7D,%7B%22op%22:%22in%22,%22content%22:%7B%22field%22:%22cases.samples.is_ffpe%22,%22value%22:%5B%22true%22%5D%7D%7D,%7B%22op%22:%22in%22,%22content%22:%7B%22field%22:%22files.data_category%22,%22value%22:%5B%22Gene%20expression%22%5D%7D%7D,%7B%22op%22:%22in%22,%22content%22:%7B%22field%22:%22files.experimental_strategy%22,%22value%22:%5B%22miRNA-Seq%22%5D%7D%7D%5D%7D&pagination=%7B%22files%22:%7B%22size%22:20,%22sort%22:%22file_name:asc,%22%7D%7D
+#7 out of 10 are FFPE samples (all except these: TCGA-A6-4*)
+patients_paired <- sub("-01B-.*","", grep("TCGA-A6-....-01B-.*", colnames(miR_COAD_comb), value =T ) )
+
+colnames(miR_COAD_comb) <- sub("-01B-.*","",colnames(miR_COAD_comb))
+##normalize, in right direction for RF
+miR_COAD_vst_01B <- as.data.frame( t( varianceStabilizingTransformation(
+  as.matrix( round( miR_COAD_comb[,grep("TCGA-A6-....-01B-.*", colnames(miR_COAD_comb))], 0 ) ) ) ) )
+colnames(miR_COAD_vst_01B) <- gsub("-", ".", colnames(miR_COAD_vst_01B))
+
+
+pred_coad_ffpe <- predict(model_RF_best_all, 
+                          newdata = miR_COAD_vst_01B[, grep("hsa", colnames(miR_COAD_vst_01B))], type = "prob")
+pred_coad_ffpe$CMS <- predict(model_RF_best_all, 
+                          newdata = miR_COAD_vst_01B[, grep("hsa", colnames(miR_COAD_vst_01B))], type = "raw")
+colnames(pred_coad_ffpe) <- paste0(colnames(pred_coad_ffpe), ".ffpe")
+pred_coad_ffpe[,paste0("CMS", 1:4)] <- predict(model_RF_best_all, 
+                          newdata = miR_COAD_vst[patients_paired, grep("hsa", colnames(miR_COAD_vst_01B))], type = "prob")
+pred_coad_ffpe[,"CMS"] <- predict(model_RF_best_all, 
+                          newdata = miR_COAD_vst[patients_paired, grep("hsa", colnames(miR_COAD_vst_01B))], type = "raw")
+
+
+#### make a correlation of the postprobs in ffpe pairs 
+pred_coad_ffpe$Sample.ID <- patients_paired
+pred_coad_ffpe_plot <- pivot_longer(pred_coad_ffpe,
+                                       cols = c(paste0("CMS", 1:4, ".ffpe"),
+                                                       paste0("CMS", 1:4)) )
+pred_coad_ffpe_plot$source <- ifelse(pred_coad_ffpe_plot$name %in% paste0("CMS", 1:4, ".ffpe"), "ffpe", "frfr")
+pred_coad_ffpe_plot$CMS.frfr <- pred_coad_ffpe_plot$CMS 
+pred_coad_ffpe_plot$CMS <- factor(sub(".ffpe","",pred_coad_ffpe_plot$name))
+pred_coad_ffpe_plot$conc <- ifelse(pred_coad_ffpe_plot$CMS.ffpe ==
+                                           pred_coad_ffpe_plot$CMS.frfr, 
+                                         "match", "nomatch")
+  
+pred_coad_ffpe_plot <- pivot_wider(pred_coad_ffpe_plot[,c("Sample.ID", "source",  "CMS", "value", "conc")], 
+                   id_cols = c("Sample.ID", "CMS", "source"),
+                             names_from = c("source"),
+                             values_from = c("value"))
+
+ggplot(pred_coad_ffpe_plot, aes(x=frfr, y=ffpe, 
+                                   color=CMS, fill=CMS) ) + 
+  geom_point()+
+  facet_grid(rows = vars(CMS)) +
+  scale_colour_manual(values=paletteCMSn, name="CMS") +
+  scale_fill_manual(values=paletteCMSn, name="CMS") +
+  theme_minimal(base_size = 22) +
+  geom_smooth(method = "lm", show.legend = F) +
+  stat_cor(size=6) 
+
+ggsave(paste0(plotDir, "COAD_postprob_correlation_miRaCl_ffpe.vs.frfr.pdf"),
+       width=6,height=10, useDingbats=FALSE)
+
+
+```
+
+
+
+
+
+```{r}
+library(survival)
+library(survminer)
+
+#event: in OS analyis is 0=alive, 1=dead, people with 0, meaning without Death/event will be censored 
+crc_surv <- rbind(rc_vst_limBatchRem[,c("hsa.mir.625", "hsa.mir.592", "hsa.mir.552",
+                    "hsa.mir.218", "hsa.mir.31", "hsa.mir.375", 
+                    "hsa.mir.143", "hsa.mir.615", "hsa.mir.335", 
+                    "hsa.mir.146b")], 
+                   miR_READ_vst_BR[,c("hsa.mir.625", "hsa.mir.592",
+                                      "hsa.mir.552",
+                    "hsa.mir.218", "hsa.mir.31", "hsa.mir.375", 
+                    "hsa.mir.143", "hsa.mir.615", "hsa.mir.335", 
+                    "hsa.mir.146b")])
+crc_surv[,c("days_death", "status", "days_fu", "stage")] <- clinical.crc[
+  match(rownames(crc_surv), rownames(clinical.crc)), 
+                                               c("days_to_death",
+                                                 "vital_status",
+                                                 "days_to_last_follow_up", "ajcc_pathologic_stage")] 
+crc_surv$OS <- crc_surv$days_death
+crc_surv$OS[which(crc_surv$status=="Alive")] <- crc_surv$days_fu[which(crc_surv$status=="Alive")]
+crc_surv$OS_Event <- ifelse(crc_surv$status == "Alive", 0, 1)
+crc_surv$OS_Event[which(is.na(crc_surv$OS))] <- NA
+
+
+
+fit_coad_iv <- Surv(time = crc_surv$OS[grep("IV",crc_surv$stage)], 
+                    event = crc_surv$OS_Event[grep("IV",crc_surv$stage)])
+fit.coxph <- coxph(fit_coad_iv ~
+                  hsa.mir.625 + hsa.mir.592 + hsa.mir.552 +
+                    hsa.mir.218 + hsa.mir.31 + hsa.mir.375 +
+                    hsa.mir.143 +hsa.mir.615 + hsa.mir.335 +
+                    hsa.mir.146b,
+                   data = crc_surv[grep("IV",crc_surv$stage),])
+ggforest(fit.coxph, data = crc_surv[grep("IV",crc_surv$stage),])
+ggsave(paste0(plotDir,"CRC_StIV_Surv-forest_top10.pdf"), 
+       height = 9, width=5)
+
+fit_coad <- Surv(time = crc_surv$OS, 
+                    event = crc_surv$OS_Event)
+fit.coxph <- coxph(fit_coad ~
+                  hsa.mir.625 + hsa.mir.592 + hsa.mir.552 +
+                    hsa.mir.218 + hsa.mir.31 + hsa.mir.375 +
+                    hsa.mir.143 +hsa.mir.615 + hsa.mir.335 +
+                    hsa.mir.146b,
+                   data = crc_surv)
+ggforest(fit.coxph, data = crc_surv)
+ggsave(paste0(plotDir,"CRC_allstages_Surv-forest_top10.pdf"), 
+       height = 9, width=5)
+
+```
+
+
+
+
+```{r}
+library("DESeq2")
+##quick overview of DE genes between normal COAD and READ 
+normCOAD <- TCGAmiR.COAD[, grep("A6-....-11A",colnames(TCGAmiR.COAD))] #5 COAD normal samples from TSS Christiana Healthcare
+clinical.coad$site_of_resection_or_biopsy[match(sub("-11A.*","",
+                                                    colnames(normCOAD)),
+                                                clinical.coad$submitter_id)]
+
+normREAD <- TCGARnaseqDF[,grep("AF-....-11A", colnames(TCGARnaseqDF))] #3 READ normalsamples from TSS Christiana Healthcare
+
+coldata <- data.frame("condition"=c(rep("COAD", 5), rep("READ", 3)))
+
+dds <- DESeqDataSetFromMatrix(countData = cbind(normCOAD, normREAD),
+                              colData = coldata,
+                              design= ~ condition)
+dds <- DESeq(dds)
+resultsNames(dds) # lists the coefficients
+res <- results(dds, name="condition_READ_vs_COAD")
+rownames(res[order(res$pvalue),])[1:76]
+res$importance <- importances_df$Overall[match(gsub("-",".",rownames(res)),
+                                 rownames(importances_df))]
+res$label <- sub(".*-","", rownames(res))
+
+ggplot(as.data.frame(res[which(gsub("-",".",rownames(res)) %in%
+                                 rownames(importances_df)[1:20]),]), 
+       aes(y=-log10(padj), x=log2FoldChange, color=importance, 
+       size=importance, label = label)) +
+  geom_point()+
+  scale_color_gradient(low="#D2D3E7", high="#3D2773")+
+  theme_minimal(base_size = 14) +
+    geom_hline(yintercept=-log10(0.05), color="grey4", linetype="dotted") +
+      geom_vline(xintercept=log2(1.5), color="grey", linetype="dashed") +
+        geom_vline(xintercept=-log2(1.5), color="grey", linetype="dashed") +
+        geom_vline(xintercept=0, color="grey") +
+  geom_text(size=4, nudge_x = -0.2, nudge_y = 0.05) +
+  labs(y = "-log10(padj)", x="log2FC(READ/COAD)")
+ggsave(paste0(plotDir,"COAD_vs_READ_normal_tissue.pdf"), 
+       height = 4, width=5, useDingbat=F)
+
+```
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r}
+### save objects of classifiers
+miRaCl20 <- model_RF_20_best_all
+miRaCl <- model_RF_best_all
+miRaCl20A <- model_RF_20_best_ffpe
+save(miRaCl, miRaCl20, miRaCl20A,
+     file = "/Users/ronjaadam/projects/miRNA_mCRC/CMS-miRaCl/scripts/classifiers.RData")
+
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
