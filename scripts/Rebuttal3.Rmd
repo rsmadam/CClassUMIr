@@ -615,7 +615,7 @@ miRaCl20 <- model_RF_20_best_all
 miRaCl <- model_RF_best_all
 miRaCl20A <- model_RF_20_best_ffpe
 save(miRaCl, miRaCl20, miRaCl20A,
-     file = "/Users/ronjaadam/projects/miRNA_mCRC/CMS-miRaCl/scripts/classifiers.RData")
+     file = "/Users/ronjaadam/projects/miRNA_mCRC/CMS-miRaCl/classifiers.RData")
 
 ```
 
