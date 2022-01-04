@@ -611,10 +611,10 @@ You can also embed plots, for example:
 
 ```{r}
 ### save objects of classifiers
-miRaCl.20 <- model_RF_20_best_all
+miRaCl20 <- model_RF_20_best_all
 miRaCl <- model_RF_best_all
-miRaCl.20A <- model_RF_20_best_ffpe
-save(miRaCl, miRaCl.20, miRaCl.20A,
+miRaCl20A <- model_RF_20_best_ffpe
+save(miRaCl, miRaCl20, miRaCl20A,
      file = "/Users/ronjaadam/projects/miRNA_mCRC/CMS-miRaCl/scripts/classifiers.RData")
 
 ```
