@@ -12,11 +12,14 @@ CMS-miRaCl.Rproj
 .Rhistory
 .Rapp.history
 # Session Data files
-*.RData
+Environment_datasets.RData
+.RData
 *.Rproj
 .DS_Store
 # User-specific files
 .Ruserdata
+# from GDCdata
+MANIFEST.txt 
 # Example code in package build process
 *-Ex.R
 # Output files from R CMD build
