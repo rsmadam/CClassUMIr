@@ -58,16 +58,42 @@ outlierM <- rownames(miR.arr.scaled[is_outlier(rowSds( as.matrix(miR.arr.scaled[
                                                                               colnames(miR.arr.scaled))]))),])#outliers with low mean AND high SD (across all samples)
 miR.arr.scaled <- miR.arr.scaled[setdiff(rownames(miR.arr.scaled), outlierM),]
 
-## identify higly correlating(redundant) features
+## identify highly correlating (redundant) features
 nzv <- nearZeroVar(miR.arr.scaled, saveMetrics=TRUE)
 which(nzv$nzv)
-descrCor <-  cor(miR.arr.scaled[, setdiff(grep("hsa", colnames(miR.arr.scaled)),
-                                     which(nzv$nzv))]) #exclude zero var
-highlyCorDescr <- unique(c(colnames(descrCor[,findCorrelation(descrCor, cutoff = .75, exact=T)]),
-                           colnames(miR.arr.scaled[,nzv$nzv])))
+descrCor <-  cor(miR.arr.scaled[, setdiff(
+  grep("hsa", colnames(miR.arr.scaled)),
+                                     which(nzv$nzv))
+]) #exclude zero var
+highlyCorDescr <- c(colnames(descrCor[,findCorrelation(descrCor, 
+                                                              cutoff = .75, exact=T)]), #107
+                           colnames(miR.arr.scaled[,nzv$nzv])) #there's no overlap between them
+colnames(miR.arr.scaled[,nzv$nzv]) #35
+
 ## exclude higly correlating(redundant) features
-miR.arr.scaled <- miR.arr.scaled[,setdiff(colnames(miR.arr.scaled),highlyCorDescr)]
+miR.arr.scaled <- miR.arr.scaled[,setdiff(colnames(miR.arr.scaled),
+                                               highlyCorDescr)]
 dim(miR.arr.scaled)
+
+## plot correlating features
+library(corrplot)
+pdf("/Users/ronjaadam/projects/miRNA_mCRC/CMS-miRaCl/analyses/plots/miRaCl20A_correlations_training_20.pdf",
+    useDingbats = F)
+corrplot(descrCor[match(rownames(importances_df_arr_nzv[1:20,]), rownames(descrCor)),
+                  c( ##which features of miRaCL could it correspond to? 
+                     match(rownames(importances_df[1:20,]),
+                           colnames(descrCor))) ], 
+         col=rev(brewer.pal(n=8, name="RdYlBu")), 
+         na.label = "o", na.label.col = "#EFEFEF",
+           addgrid.col = NA, tl.cex = 1.2,
+         tl.col = "#999999")
+dev.off()
+
+## these features were 
+intersect(rownames(importances_df[1:20,]), highlyCorDescr)#,
+      #colnames(descrCor))
+## "hsa.mir.218" "hsa.mir.143" "hsa.mir.99a" "hsa.mir.141"
+
 
 set.seed(5678) 
 out_Test <- createDataPartition(miR.arr.scaled$CMS, p = .2, # this adapts to original fractions of classes
@@ -218,13 +244,13 @@ importances_df_arr_nzv <- importances_df_arr_nzv[order(-importances_df_arr_nzv$O
  # write.csv(importances_df_arr_nzv, row.names = T,
  #           "analyses/tables/val_1-75x5cv_10x10cv_importances_arrayFFPE_nzv.csv")
 
-importances_df <- read.csv("analyses/tables/val_100x5cv_10x10cv_importances.csv",
-                           row.names = 1)
+importances_df_arr_nzv <- read.csv("analyses/tables/VAL_1-75x5cv_10x10cv_importances_arrayFFPE_nzv.csv",
+                           row.names = 1, sep="\t")
 plot(importances_df_arr_nzv$Overall[1:50])
 rownames(importances_df_arr_nzv[1:50,])
 
 
-############ big RF training on all COAD data ###############
+############ big RF training on FFPE data ###############
 #### create parameters for all samples ####
 set.seed(5678) 
 bigContr <- trainControl(
@@ -281,3 +307,4 @@ model_RF_20_best_ffpe <- caret::train(CMS~.,
                                   tuneGrid= bestParam_20, 
                                   num.trees = 2000,  
                                   trControl= testingContr)
+
